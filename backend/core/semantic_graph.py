@@ -26,7 +26,7 @@ def get_model():
 
 def embed(text: str) -> np.ndarray:
     """Convert text to normalised embedding vector (384-dim)."""
-    return get_model().encode(text, normalize_embeddings=True)
+    return np.array(get_model().encode(text, normalize_embeddings=True))
 
 def cosine_sim(a: np.ndarray, b: np.ndarray) -> float:
     """Cosine similarity between two normalised vectors."""
