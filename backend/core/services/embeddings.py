@@ -1,3 +1,4 @@
+# embeddings.py
 import numpy as np
 import faiss
 import os

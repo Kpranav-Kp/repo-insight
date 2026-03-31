@@ -1,7 +1,8 @@
+# github.py
 import requests
 import re
 from typing import List, Dict, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_not_exception_type
 
 
@@ -21,6 +22,7 @@ class IssueData:
     body: str
     state: str
     labels: List[str]
+    skills: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -129,7 +131,10 @@ class GitHubClient():
                 
                 if len(prs) >= limit:
                     break
-                
+
+                if not item.get("merged_at"):
+                    continue
+
                 if item.get("merged_at"):
                     pr_state = "merged"
                 else:

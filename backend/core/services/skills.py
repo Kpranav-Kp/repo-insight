@@ -1,5 +1,5 @@
 import re
-from typing import List
+from typing import List, Optional
 
 
 class SkillExtractor:
@@ -25,7 +25,7 @@ class SkillExtractor:
         "microservices", "serverless", "ci/cd", "testing", "tdd", "agile",
     }
 
-    def __init__(self, custom_skills: List[str]):
+    def __init__(self, custom_skills: Optional[List[str]] = None):
         self.skills = self.SKILLS_DB.copy()
         if custom_skills:
             self.skills.update(s.lower() for s in custom_skills)
