@@ -167,10 +167,13 @@ class SemanticGraph:
         Compute all edge types.
         Call once after all nodes are added.
         """
+        self.skills.build_index()
+        self.issues.build_index()
+        self.prs.build_index()
+        
         self._build_skill_issue_edges()
         self._build_issue_issue_edges()
         self._build_issue_pr_edges()
-
         logger.info(
             "Graph edges built — SKILL→ISSUE: %d | ISSUE→ISSUE: %d | ISSUE→PR: %d",
             len(self.adj.get_edges(self.SKILL_ISSUE_SIM)),
@@ -179,43 +182,52 @@ class SemanticGraph:
         )
 
     def _build_skill_issue_edges(self):
+        if not self.skills.meta or not self.issues.meta:
+            return
+
+        skill_texts = [m.get("_text", "") for m in self.skills.meta]
+        issue_texts = [m.get("_text", "") for m in self.issues.meta]
+
+        skill_vecs = self.skills._service.encode(skill_texts)  
+        issue_vecs = self.issues._service.encode(issue_texts) 
+
+        sim_matrix = skill_vecs @ issue_vecs.T                
+
         for s_idx, skill_meta in enumerate(self.skills.meta):
-            skill_vec = self.skills.get_vector(s_idx)
-
             for i_idx, issue_meta in enumerate(self.issues.meta):
-                issue_vec = self.issues.get_vector(i_idx)
-                sim = float(skill_vec @ issue_vec)  
-
+                sim = float(sim_matrix[s_idx, i_idx])          
                 if sim >= self.SKILL_ISSUE_THRESHOLD:
                     self.adj.add_edge(
-                        source_type = "skill",
-                        source_id   = skill_meta["name"],
-                        target_type = "issue",
-                        target_id   = issue_meta["id"],
-                        relation    = self.SKILL_ISSUE_SIM,
-                        weight      = sim,
+                        source_type="skill",
+                        source_id=skill_meta["name"],
+                        target_type="issue",
+                        target_id=issue_meta["id"],
+                        relation=self.SKILL_ISSUE_SIM,
+                        weight=sim,
                     )
 
     def _build_issue_issue_edges(self):
-        """
-        O(n²) pairwise comparison — acceptable for n ≤ 100.
-        TODO: replace with FAISS batch search when scaling beyond that.
-        """
-        n = len(self.issues)
+        if len(self.issues.meta) < 2:
+            return
+
+        issue_texts = [m.get("_text", "") for m in self.issues.meta]
+
+        issue_vecs = self.issues._service.encode(issue_texts)  
+
+        sim_matrix = issue_vecs @ issue_vecs.T         
+
+        n = len(self.issues.meta)
         for i in range(n):
             for j in range(i + 1, n):
-                vec_i = self.issues.get_vector(i)
-                vec_j = self.issues.get_vector(j)
-                sim   = float(vec_i @ vec_j)
-
+                sim = float(sim_matrix[i, j])                  
                 if sim >= self.ISSUE_ISSUE_THRESHOLD:
                     self.adj.add_edge(
-                        source_type = "issue",
-                        source_id   = self.issues.meta[i]["id"],
-                        target_type = "issue",
-                        target_id   = self.issues.meta[j]["id"],
-                        relation    = self.ISSUE_ISSUE_SIM,
-                        weight      = sim,
+                        source_type="issue",
+                        source_id=self.issues.meta[i]["id"],
+                        target_type="issue",
+                        target_id=self.issues.meta[j]["id"],
+                        relation=self.ISSUE_ISSUE_SIM,
+                        weight=sim,
                     )
 
     def _build_issue_pr_edges(self):
