@@ -1,4 +1,3 @@
-from django.shortcuts import render
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -18,7 +17,7 @@ class RepositoryAnalyzeView(APIView):
             return Response({"error": "URL is required."}, status=status.HTTP_400_BAD_REQUEST)
         
         repo, created = Repository.objects.get_or_create(url=url)
-        if repo.status == "ready":
+        if repo.status == "completed":
             return Response(RepositorySerializer(repo).data)
         
         repo.status = "processing"
@@ -38,6 +37,10 @@ class ChatSessionView(APIView):
 
     def post(self, request):
         repo_id = request.data.get("repository_id")
+
+        if not repo_id:
+            return Response({"error": "repository_id is required."}, status=status.HTTP_400_BAD_REQUEST)
+        
         repo = get_object_or_404(Repository, id=repo_id, status="ready")
 
         session, created = ConversationSession.objects.get_or_create(
@@ -46,23 +49,31 @@ class ChatSessionView(APIView):
             defaults={"state":{}, "phase": "onboarding"}
         )
 
+        return Response(ConversationSessionSerializer(session).data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
 class ChatMessageView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        serializer = ChatMessageSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        session = get_object_or_404(ConversationSession, id=serializer.validated_data["session_id"], user=request.user)
-        
-        return Response(
-            {
-                "message": "Agent response goes here",
-                "phase": session.phase,
-                "session_id": session.id,
-            }
+        serializer = ChatMessageSerializer(
+            data=request.data,
+            context={"request": request}
         )
+        if not serializer.is_valid():
+            return Response(serializer.errors,
+                            status=status.HTTP_400_BAD_REQUEST)
+        session_id = serializer.validated_data["session_id"]
+        session: ConversationSession = get_object_or_404(
+            ConversationSession,
+            id=session_id,
+            user=request.user
+        )
+
+        return Response({
+            "message": "Agent response goes here",
+            "phase": session.phase,
+            "session_id": session.pk,
+        })
 
 class RecommendationFeedbackView(APIView):
     permission_classes = [IsAuthenticated]

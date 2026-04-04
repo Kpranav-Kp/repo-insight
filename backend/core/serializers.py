@@ -42,11 +42,13 @@ class RecommendationSerializer(serializers.ModelSerializer):
         
 class ChatMessageSerializer(serializers.Serializer):
     
-    session_id = serializers.UUIDField()
+    session_id = serializers.IntegerField()
     message = serializers.CharField(max_length=2000)
     
     def validate_session_id(self, value):
         request = self.context.get("request")
+        if request is None:
+            raise serializers.ValidationError("Request context is required.")
         try:
             session = ConversationSession.objects.get(id=value)
             if session.user != request.user:
