@@ -17,6 +17,7 @@ class Repository(models.Model):
     error_message = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    index_path = models.CharField(max_length=500, blank=True)
 
     def __str__(self):
         return self.url

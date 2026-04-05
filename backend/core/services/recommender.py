@@ -1,9 +1,9 @@
-# recommender.py
 from typing import List, Dict, Optional
 from .github import GitHubClient, GitHubError, RateLimitError
 from .skills import SkillExtractor
 from .semantic_graph import SemanticGraph
 from django.conf import settings
+import json, os
 
 
 class RecommendationEngine:
@@ -137,20 +137,41 @@ class RecommendationEngine:
             )
         return self.graph.is_duplicate_issue(issue_text)
 
-    def save_index(self, path: str):
+    def save_index(self, directory: str):
         """
         Persist the FAISS index + metadata to disk.
         Note: graph edges are in-memory and must be rebuilt on load.
         """
         if not self._is_built:
             raise RuntimeError("Nothing to save. Build the graph first.")
-        raise NotImplementedError(
-            "Wire this to EmbeddingService.save() once you migrate "
-            "NodeStore to use EmbeddingService internally. "
-            "See TODO in semantic_graph.py."
-        )
+        
 
-    def load_index(self, path: str):
-        raise NotImplementedError(
-            "Same as save_index — implement after NodeStore migration."
-        )
+        self.graph.issues._service.save(os.path.join(directory, "issues"))
+        self.graph.skills._service.save(os.path.join(directory, "skills"))
+        self.graph.prs._service.save(os.path.join(directory, "prs"))
+
+        with open(os.path.join(directory, "edges.json"), "w") as f:
+            json.dump(self.graph.adj.edges, f)
+
+    def load_index(self, directory: str):
+        self.graph.issues._service.load(os.path.join(directory, "issues"))
+        self.graph.skills._service.load(os.path.join(directory, "skills"))
+        self.graph.prs._service.load(os.path.join(directory, "prs"))
+
+        with open(os.path.join(directory, "edges.json"), "r") as f:
+            self.graph.adj.edges = json.load(f)
+
+        self.graph.issues.meta = list(self.graph.issues._service.metadata.values())
+        self.graph.skills.meta = list(self.graph.skills._service.metadata.values())
+        self.graph.prs.meta = list(self.graph.prs._service.metadata.values())
+
+        self.graph.issues._id_to_idx = {
+            str(m.get("id", "")): i for i, m in enumerate(self.graph.issues.meta)
+        }
+        self.graph.skills._id_to_idx = {
+            str(m.get("id", "")): i for i, m in enumerate(self.graph.skills.meta)
+        }
+        self.graph.prs._id_to_idx = {
+            str(m.get("id", "")): i for i, m in enumerate(self.graph.prs.meta)
+        }
+        self._is_built = True

@@ -2,6 +2,7 @@ from celery import shared_task
 from .models import Repository
 from .services.recommender import RecommendationEngine
 from django.conf import settings
+import os
 
 @shared_task
 def analyze_repository_task(repo_id : int):
@@ -12,6 +13,12 @@ def analyze_repository_task(repo_id : int):
     try:
         engine = RecommendationEngine(github_token=settings.GITHUB_TOKEN)
         result = engine.build_from_repository(repo.url)
+
+        index_dir = os.path.join(settings.BASE_DIR, "indexes", str(repo_id))
+        os.makedirs(index_dir, exist_ok=True)
+        engine.save_index(index_dir)
+
+
         repo.status = 'completed'
         repo.issues_indexed = result['issues_indexed']
         repo.prs_indexed = result['prs_indexed']
