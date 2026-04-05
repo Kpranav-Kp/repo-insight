@@ -2,8 +2,8 @@
 from typing import List, Dict, Optional
 from .github import GitHubClient, GitHubError, RateLimitError
 from .skills import SkillExtractor
-from .embeddings import EmbeddingService
 from .semantic_graph import SemanticGraph
+from django.conf import settings
 
 
 class RecommendationEngine:
@@ -11,7 +11,8 @@ class RecommendationEngine:
     def __init__(self, github_token: Optional[str] = None):
         self.github = GitHubClient(token=github_token)
         self.skill_extractor = SkillExtractor()
-        self.graph = SemanticGraph()
+        model_path = getattr(settings, 'SENTENCE_TRANSFORMER_MODEL', 'all-MiniLM-L6-v2')
+        self.graph = SemanticGraph(model_name=model_path)
         self._is_built = False
 
 

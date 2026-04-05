@@ -151,3 +151,11 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = "static/"
+
+CELERY_BROKER_URL = 'redis://localhost:6379/0'
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+
+GITHUB_TOKEN = os.getenv('GITHUB_TOKEN', default='')
+os.environ['HF_HOME'] = os.getenv('HF_HOME', default='C:\\HFCache')
+os.environ['TRANSFORMERS_CACHE'] = os.getenv('TRANSFORMERS_CACHE', default='C:\\HFCache')
+SENTENCE_TRANSFORMER_MODEL = os.getenv('SENTENCE_TRANSFORMER_MODEL', default='all-MiniLM-L6-v2')

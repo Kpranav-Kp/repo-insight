@@ -13,8 +13,8 @@ class NodeStore:
     to avoid O(n) .index() scans.
     """
 
-    def __init__(self):
-        self._service = EmbeddingService()  
+    def __init__(self, embedding_service: EmbeddingService):
+        self._service = embedding_service
         self.meta: list[dict] = []
         self._id_to_idx: dict[str, int] = {}
 
@@ -120,10 +120,12 @@ class SemanticGraph:
     SKILL_ISSUE_THRESHOLD = 0.35  
     ISSUE_ISSUE_THRESHOLD = 0.50
 
-    def __init__(self):
-        self.skills = NodeStore()
-        self.issues = NodeStore()
-        self.prs    = NodeStore()
+    def __init__(self, model_name: str = "all-MiniLM-L6-v2"):
+        shared_service = EmbeddingService(model_name=model_name)
+        
+        self.skills = NodeStore(embedding_service=shared_service)
+        self.issues = NodeStore(embedding_service=shared_service)
+        self.prs    = NodeStore(embedding_service=shared_service)
         self.adj    = AdjacencyTable()
 
 
