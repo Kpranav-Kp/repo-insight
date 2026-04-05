@@ -81,8 +81,8 @@ class ChatMessageSerializer(serializers.Serializer):
                 raise serializers.ValidationError(
                     "This session does not belong to you."
                 )
-        except ConversationSession.DoesNotExist:
-            raise serializers.ValidationError("Invalid session ID.")
+        except ConversationSession.DoesNotExist as e:
+            raise serializers.ValidationError("Invalid session ID.") from e
 
         return value
 

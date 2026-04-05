@@ -27,16 +27,16 @@ class RecommendationEngine:
         try:
             issues = self.github.fetch_issues(repo_url, limit=50)
         except RateLimitError as e:
-            raise RuntimeError(f"GitHub rate limit hit: {e}")
+            raise RuntimeError(f"GitHub rate limit hit: {e}") from e
         except GitHubError as e:
-            raise RuntimeError(f"Failed to fetch issues: {e}")
+            raise RuntimeError(f"Failed to fetch issues: {e}") from e
 
         try:
             prs = self.github.fetch_pull_requests(repo_url, limit=20)
         except RateLimitError as e:
-            raise RuntimeError(f"GitHub rate limit hit: {e}")
+            raise RuntimeError(f"GitHub rate limit hit: {e}") from e
         except GitHubError as e:
-            raise RuntimeError(f"Failed to fetch PRs: {e}")
+            raise RuntimeError(f"Failed to fetch PRs: {e}") from e
 
         all_skills = set()
 

@@ -11,8 +11,8 @@ from .services.recommender import RecommendationEngine
 def analyze_repository_task(repo_id: int):
     try:
         repo = Repository.objects.get(id=repo_id)
-    except Repository.DoesNotExist:
-        raise ValueError("Repository not found")
+    except Repository.DoesNotExist as e:
+        raise ValueError("Repository not found") from e
     try:
         engine = RecommendationEngine(github_token=settings.GITHUB_TOKEN)
         result = engine.build_from_repository(repo.url)
