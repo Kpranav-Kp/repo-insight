@@ -57,7 +57,20 @@ class ChatSessionView(APIView):
         session, created = ConversationSession.objects.get_or_create(
             user=request.user,
             repository=repo,
-            defaults={"state":{}, "phase": "onboarding"}
+            defaults=
+            {
+                "state": 
+                {
+                        "repo_id": repo.pk,
+                        "repo_url": repo.url,
+                        "user_skills": [],
+                        "intent": "",
+                        "selected_issue": None,
+                        "conversation_phase": "onboarding",
+                        "messages": []
+                    },
+                "phase": "onboarding"
+            }
         )
 
         return Response(ConversationSessionSerializer(session).data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
