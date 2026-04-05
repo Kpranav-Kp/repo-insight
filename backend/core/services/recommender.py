@@ -1,22 +1,22 @@
-from typing import List, Dict, Optional
-from .github import GitHubClient, GitHubError, RateLimitError
-from .skills import SkillExtractor
-from .semantic_graph import SemanticGraph
+import json
+import os
+
 from django.conf import settings
-import json, os
+
+from .github import GitHubClient, GitHubError, RateLimitError
+from .semantic_graph import SemanticGraph
+from .skills import SkillExtractor
 
 
 class RecommendationEngine:
-
-    def __init__(self, github_token: Optional[str] = None):
+    def __init__(self, github_token: str | None = None):
         self.github = GitHubClient(token=github_token)
         self.skill_extractor = SkillExtractor()
-        model_path = getattr(settings, 'SENTENCE_TRANSFORMER_MODEL', 'all-MiniLM-L6-v2')
+        model_path = getattr(settings, "SENTENCE_TRANSFORMER_MODEL", "all-MiniLM-L6-v2")
         self.graph = SemanticGraph(model_name=model_path)
         self._is_built = False
 
-
-    def build_from_repository(self, repo_url: str) -> Dict:
+    def build_from_repository(self, repo_url: str) -> dict:
         """
         Fetch issues + PRs from repo, populate the semantic graph,
         and build all edges.
@@ -45,28 +45,34 @@ class RecommendationEngine:
             skills = self.skill_extractor.extract(text)
             all_skills.update(skills)
 
-            self.graph.add_issue({
-                "id":      str(issue.number),
-                "title":   issue.title,
-                "summary": issue.body[:500],
-                "skills":  skills,
-                "labels":  issue.labels,
-                "state":   issue.state,
-            })
+            self.graph.add_issue(
+                {
+                    "id": str(issue.number),
+                    "title": issue.title,
+                    "summary": issue.body[:500],
+                    "skills": skills,
+                    "labels": issue.labels,
+                    "state": issue.state,
+                }
+            )
         for pr in prs:
             if not pr.linked_issue_numbers:
-                self.graph.add_pr({
-                    "id":       str(pr.number),
-                    "title":    pr.title,
-                    "issue_id": None,
-                })
+                self.graph.add_pr(
+                    {
+                        "id": str(pr.number),
+                        "title": pr.title,
+                        "issue_id": None,
+                    }
+                )
             else:
                 for linked_issue_id in pr.linked_issue_numbers:
-                    self.graph.add_pr({
-                        "id":       str(pr.number),
-                        "title":    pr.title,
-                        "issue_id": str(linked_issue_id),
-                    })
+                    self.graph.add_pr(
+                        {
+                            "id": str(pr.number),
+                            "title": pr.title,
+                            "issue_id": str(linked_issue_id),
+                        }
+                    )
 
         self.graph.build_edges()
         self._is_built = True
@@ -74,13 +80,12 @@ class RecommendationEngine:
         return {
             "repository_url": repo_url,
             "issues_indexed": len(issues),
-            "prs_indexed":    len(prs),
-            "skills_found":   sorted(all_skills),
-            "graph_stats":    self.graph.stats(),
+            "prs_indexed": len(prs),
+            "skills_found": sorted(all_skills),
+            "graph_stats": self.graph.stats(),
         }
 
-
-    def recommend(self, user_skills: List[str], top_k: int = 5) -> List[Dict]:
+    def recommend(self, user_skills: list[str], top_k: int = 5) -> list[dict]:
         """
         Given a list of user skills, return top-K skill-matched issues
         enriched with novelty scores.
@@ -88,9 +93,7 @@ class RecommendationEngine:
         Raises RuntimeError if build_from_repository() has not been called.
         """
         if not self._is_built:
-            raise RuntimeError(
-                "Graph not built. Call build_from_repository() first."
-            )
+            raise RuntimeError("Graph not built. Call build_from_repository() first.")
 
         raw_results = self.graph.skill_to_issue(user_skills, top_k=top_k * 2)
 
@@ -107,22 +110,23 @@ class RecommendationEngine:
             )
             combined_score = round(0.7 * r["score"] + 0.3 * novelty, 4)
 
-            recommendations.append({
-                "id":            r["id"],
-                "title":         r["title"],
-                "summary":       r.get("summary", ""),
-                "labels":        r.get("labels", []),
-                "skills":        r.get("skills", []),
-                "skill_overlap": overlap,
-                "match_score":   round(r["score"], 4),
-                "novelty_score": novelty,
-                "combined_score": combined_score,
-            })
+            recommendations.append(
+                {
+                    "id": r["id"],
+                    "title": r["title"],
+                    "summary": r.get("summary", ""),
+                    "labels": r.get("labels", []),
+                    "skills": r.get("skills", []),
+                    "skill_overlap": overlap,
+                    "match_score": round(r["score"], 4),
+                    "novelty_score": novelty,
+                    "combined_score": combined_score,
+                }
+            )
 
         # Sort by combined score descending
         recommendations.sort(key=lambda x: x["combined_score"], reverse=True)
         return recommendations[:top_k]
-
 
     def check_duplicate(self, issue_text: str) -> tuple:
         """
@@ -132,9 +136,7 @@ class RecommendationEngine:
         Returns (True, matched_issue_dict) or (False, None).
         """
         if not self._is_built:
-            raise RuntimeError(
-                "Graph not built. Call build_from_repository() first."
-            )
+            raise RuntimeError("Graph not built. Call build_from_repository() first.")
         return self.graph.is_duplicate_issue(issue_text)
 
     def save_index(self, directory: str):
@@ -144,7 +146,6 @@ class RecommendationEngine:
         """
         if not self._is_built:
             raise RuntimeError("Nothing to save. Build the graph first.")
-        
 
         self.graph.issues._service.save(os.path.join(directory, "issues"))
         self.graph.skills._service.save(os.path.join(directory, "skills"))
@@ -158,7 +159,7 @@ class RecommendationEngine:
         self.graph.skills._service.load(os.path.join(directory, "skills"))
         self.graph.prs._service.load(os.path.join(directory, "prs"))
 
-        with open(os.path.join(directory, "edges.json"), "r") as f:
+        with open(os.path.join(directory, "edges.json")) as f:
             self.graph.adj.edges = json.load(f)
 
         self.graph.issues.meta = list(self.graph.issues._service.metadata.values())

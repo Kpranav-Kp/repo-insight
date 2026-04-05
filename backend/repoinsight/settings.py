@@ -10,10 +10,11 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
-from pathlib import Path
 import os
-from dotenv import load_dotenv
 from datetime import timedelta
+from pathlib import Path
+
+from dotenv import load_dotenv
 
 # Load environment variables from .env file
 load_dotenv()
@@ -26,10 +27,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('SECRET_KEY')
+SECRET_KEY = os.getenv("SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv('DEBUG') == 'True'
+DEBUG = os.getenv("DEBUG") == "True"
 
 ALLOWED_HOSTS = []
 
@@ -37,9 +38,9 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
-    'rest_framework',
-    'rest_framework_simplejwt',
-    'core',
+    "rest_framework",
+    "rest_framework_simplejwt",
+    "core",
     "corsheaders",
     "django.contrib.admin",
     "django.contrib.auth",
@@ -61,17 +62,17 @@ MIDDLEWARE = [
 ]
 
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
     ],
-    'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticated',
-    ]
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+    ],
 }
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
 }
 
 CORS_ALLOWED_ORIGINS = [
@@ -105,13 +106,13 @@ WSGI_APPLICATION = "repoinsight.wsgi.application"
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'repoinsight_db',
-        'USER': 'repoinsight_user',
-        'PASSWORD': os.getenv('DATABASE_PASSWORD'),
-        'HOST': 'localhost',
-        'PORT': os.getenv('DATABASE_PORT'),
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": "repoinsight_db",
+        "USER": "repoinsight_user",
+        "PASSWORD": os.getenv("DATABASE_PASSWORD"),
+        "HOST": "localhost",
+        "PORT": os.getenv("DATABASE_PORT"),
     }
 }
 
@@ -152,10 +153,14 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 
-CELERY_BROKER_URL = 'redis://localhost:6379/0'
-CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+CELERY_BROKER_URL = "redis://localhost:6379/0"
+CELERY_RESULT_BACKEND = "redis://localhost:6379/0"
 
-GITHUB_TOKEN = os.getenv('GITHUB_TOKEN', default='')
-os.environ['HF_HOME'] = os.getenv('HF_HOME', default='C:\\HFCache')
-os.environ['TRANSFORMERS_CACHE'] = os.getenv('TRANSFORMERS_CACHE', default='C:\\HFCache')
-SENTENCE_TRANSFORMER_MODEL = os.getenv('SENTENCE_TRANSFORMER_MODEL', default='all-MiniLM-L6-v2')
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", default="")
+os.environ["HF_HOME"] = os.getenv("HF_HOME", default="C:\\HFCache")
+os.environ["TRANSFORMERS_CACHE"] = os.getenv(
+    "TRANSFORMERS_CACHE", default="C:\\HFCache"
+)
+SENTENCE_TRANSFORMER_MODEL = os.getenv(
+    "SENTENCE_TRANSFORMER_MODEL", default="all-MiniLM-L6-v2"
+)

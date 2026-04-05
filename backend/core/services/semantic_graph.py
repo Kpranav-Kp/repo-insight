@@ -1,9 +1,8 @@
 import logging
-from typing import Optional
+
 from .embeddings import EmbeddingService, SearchResult
 
 logger = logging.getLogger(__name__)
-
 
 
 class NodeStore:
@@ -41,23 +40,21 @@ class NodeStore:
         output = []
         for r in results:
             entry = {**r.metadata, "score": round(r.score, 4)}
-            entry.pop("_text", None)  
+            entry.pop("_text", None)
             output.append(entry)
         return output
 
     def get_vector(self, idx: int):
         """Return the embedding vector for a node by its list index."""
-        node_id = self.meta[idx].get("id", str(idx))
-        text    = self.meta[idx].get("_text", "")
+        text = self.meta[idx].get("_text", "")
         return self._service.encode([text])[0]
 
-    def get_idx_by_id(self, node_id: str) -> Optional[int]:
+    def get_idx_by_id(self, node_id: str) -> int | None:
         """O(1) lookup of list index by node id string."""
         return self._id_to_idx.get(str(node_id))
 
     def __len__(self):
         return len(self.meta)
-
 
 
 class AdjacencyTable:
@@ -79,20 +76,21 @@ class AdjacencyTable:
         relation: str,
         weight: float,
     ):
-        self.edges.append({
-            "source_type": source_type,
-            "source_id":   source_id,
-            "target_type": target_type,
-            "target_id":   target_id,
-            "relation":    relation,
-            "weight":      round(weight, 4),
-        })
+        self.edges.append(
+            {
+                "source_type": source_type,
+                "source_id": source_id,
+                "target_type": target_type,
+                "target_id": target_id,
+                "relation": relation,
+                "weight": round(weight, 4),
+            }
+        )
 
-    def get_edges(self, relation: Optional[str] = None) -> list[dict]:
+    def get_edges(self, relation: str | None = None) -> list[dict]:
         if relation:
             return [e for e in self.edges if e["relation"] == relation]
         return self.edges
-
 
 
 class SemanticGraph:
@@ -114,20 +112,19 @@ class SemanticGraph:
 
     SKILL_ISSUE_SIM = "SKILL_ISSUE_SIM"
     ISSUE_ISSUE_SIM = "ISSUE_ISSUE_SIM"
-    ISSUE_PR_HIST   = "ISSUE_PR_HIST"
+    ISSUE_PR_HIST = "ISSUE_PR_HIST"
 
-    DEDUP_THRESHOLD       = 0.90
-    SKILL_ISSUE_THRESHOLD = 0.35  
+    DEDUP_THRESHOLD = 0.90
+    SKILL_ISSUE_THRESHOLD = 0.35
     ISSUE_ISSUE_THRESHOLD = 0.50
 
     def __init__(self, model_name: str = "all-MiniLM-L6-v2"):
         shared_service = EmbeddingService(model_name=model_name)
-        
+
         self.skills = NodeStore(embedding_service=shared_service)
         self.issues = NodeStore(embedding_service=shared_service)
-        self.prs    = NodeStore(embedding_service=shared_service)
-        self.adj    = AdjacencyTable()
-
+        self.prs = NodeStore(embedding_service=shared_service)
+        self.adj = AdjacencyTable()
 
     def add_skill(self, skill_name: str):
         """Add a skill node. Skips if already present."""
@@ -163,7 +160,6 @@ class SemanticGraph:
             raise ValueError("PR dict must contain 'id' and 'title'.")
         self.prs.add(text=pr["title"], metadata=pr)
 
-
     def build_edges(self):
         """
         Compute all edge types.
@@ -172,7 +168,7 @@ class SemanticGraph:
         self.skills.build_index()
         self.issues.build_index()
         self.prs.build_index()
-        
+
         self._build_skill_issue_edges()
         self._build_issue_issue_edges()
         self._build_issue_pr_edges()
@@ -190,14 +186,14 @@ class SemanticGraph:
         skill_texts = [m.get("_text", "") for m in self.skills.meta]
         issue_texts = [m.get("_text", "") for m in self.issues.meta]
 
-        skill_vecs = self.skills._service.encode(skill_texts)  
-        issue_vecs = self.issues._service.encode(issue_texts) 
+        skill_vecs = self.skills._service.encode(skill_texts)
+        issue_vecs = self.issues._service.encode(issue_texts)
 
-        sim_matrix = skill_vecs @ issue_vecs.T                
+        sim_matrix = skill_vecs @ issue_vecs.T
 
         for s_idx, skill_meta in enumerate(self.skills.meta):
             for i_idx, issue_meta in enumerate(self.issues.meta):
-                sim = float(sim_matrix[s_idx, i_idx])          
+                sim = float(sim_matrix[s_idx, i_idx])
                 if sim >= self.SKILL_ISSUE_THRESHOLD:
                     self.adj.add_edge(
                         source_type="skill",
@@ -214,14 +210,14 @@ class SemanticGraph:
 
         issue_texts = [m.get("_text", "") for m in self.issues.meta]
 
-        issue_vecs = self.issues._service.encode(issue_texts)  
+        issue_vecs = self.issues._service.encode(issue_texts)
 
-        sim_matrix = issue_vecs @ issue_vecs.T         
+        sim_matrix = issue_vecs @ issue_vecs.T
 
         n = len(self.issues.meta)
         for i in range(n):
             for j in range(i + 1, n):
-                sim = float(sim_matrix[i, j])                  
+                sim = float(sim_matrix[i, j])
                 if sim >= self.ISSUE_ISSUE_THRESHOLD:
                     self.adj.add_edge(
                         source_type="issue",
@@ -237,14 +233,13 @@ class SemanticGraph:
             issue_id = pr_meta.get("issue_id")
             if issue_id:
                 self.adj.add_edge(
-                    source_type = "issue",
-                    source_id   = str(issue_id),
-                    target_type = "pr",
-                    target_id   = pr_meta["id"],
-                    relation    = self.ISSUE_PR_HIST,
-                    weight      = 1.0,
+                    source_type="issue",
+                    source_id=str(issue_id),
+                    target_type="pr",
+                    target_id=pr_meta["id"],
+                    relation=self.ISSUE_PR_HIST,
+                    weight=1.0,
                 )
-
 
     def skill_to_issue(self, user_skills: list[str], top_k: int = 5) -> list[dict]:
         """
@@ -255,8 +250,7 @@ class SemanticGraph:
         results = self.issues.search(query_text, top_k=top_k)
         return [r for r in results if r["score"] > 0]
 
-
-    def is_duplicate_issue(self, new_issue_text: str) -> tuple[bool, Optional[dict]]:
+    def is_duplicate_issue(self, new_issue_text: str) -> tuple[bool, dict | None]:
         """
         Returns (True, matched_issue) if similarity >= DEDUP_THRESHOLD,
         else (False, None).
@@ -266,7 +260,6 @@ class SemanticGraph:
             return True, results[0]
         return False, None
 
-
     def novelty_score(self, recommendation_text: str, issue_id: str) -> float:
         """
         novelty = 1 - max_cosine_sim(recommendation, existing PRs for this issue)
@@ -275,7 +268,8 @@ class SemanticGraph:
         Uses O(1) id lookup via NodeStore._id_to_idx — no list scanning.
         """
         pr_edges = [
-            e for e in self.adj.get_edges(self.ISSUE_PR_HIST)
+            e
+            for e in self.adj.get_edges(self.ISSUE_PR_HIST)
             if e["source_id"] == str(issue_id)
         ]
         if not pr_edges:
@@ -294,17 +288,16 @@ class SemanticGraph:
                 continue
 
             pr_vec = self.prs.get_vector(pr_idx)
-            sim    = float(rec_vec @ pr_vec)
+            sim = float(rec_vec @ pr_vec)
             if sim > max_sim:
                 max_sim = sim
 
         return round(1.0 - max_sim, 4)
 
-
     def stats(self) -> dict:
         return {
             "skills": len(self.skills),
             "issues": len(self.issues),
-            "prs":    len(self.prs),
-            "edges":  len(self.adj.edges),
+            "prs": len(self.prs),
+            "edges": len(self.adj.edges),
         }

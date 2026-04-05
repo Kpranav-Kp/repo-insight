@@ -1,15 +1,16 @@
-from django.db import models
 from django.contrib.auth.models import User
+from django.db import models
+
 
 class Repository(models.Model):
     STATUS_CHOICES = [
-        ('pending', 'Pending'),
-        ('processing', 'Processing'),
-        ('completed', 'Completed'),
-        ('failed', 'Failed'),
+        ("pending", "Pending"),
+        ("processing", "Processing"),
+        ("completed", "Completed"),
+        ("failed", "Failed"),
     ]
     url = models.URLField(unique=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
     task_id = models.CharField(max_length=255, blank=True)
     issues_indexed = models.IntegerField(default=0)
     prs_indexed = models.IntegerField(default=0)
@@ -22,16 +23,23 @@ class Repository(models.Model):
     def __str__(self):
         return self.url
 
+
 class UserProfile(models.Model):
     BAND_CHOICES = [
-        ('beginner', 'Beginner'),
-        ('intermediate', 'Intermediate'),
-        ('advanced', 'Advanced'),
+        ("beginner", "Beginner"),
+        ("intermediate", "Intermediate"),
+        ("advanced", "Advanced"),
     ]
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     skills = models.JSONField(default=list)
-    target_repo = models.ForeignKey(Repository, null=True, blank=True, on_delete=models.SET_NULL)
+    target_repo = models.ForeignKey(
+        Repository, null=True, blank=True, on_delete=models.SET_NULL
+    )
     intent = models.TextField(blank=True)
+
+    def __str__(self):
+        return f"{self.user.username}'s profile"
+
 
 class Recommendation(models.Model):
     repository = models.ForeignKey(Repository, on_delete=models.CASCADE)
@@ -45,11 +53,15 @@ class Recommendation(models.Model):
     match_score = models.FloatField()
     novelty_score = models.FloatField()
     combined_score = models.FloatField()
-    feedback = models.BooleanField(null=True, blank=True)  
+    feedback = models.BooleanField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["-combined_score"]
+
+    def __str__(self):
+        return f"Recommendation for {self.user.username} on {self.repository.url} - Issue {self.issue_id}"
+
 
 class ConversationSession(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
@@ -60,4 +72,7 @@ class ConversationSession(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ['user', 'repository']
+        unique_together = ["user", "repository"]
+
+    def __str__(self):
+        return f"Session for {self.user.username} on {self.repository.url} - Phase: {self.phase}"

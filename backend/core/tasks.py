@@ -1,11 +1,14 @@
-from celery import shared_task
-from .models import Repository
-from .services.recommender import RecommendationEngine
-from django.conf import settings
 import os
 
+from celery import shared_task
+from django.conf import settings
+
+from .models import Repository
+from .services.recommender import RecommendationEngine
+
+
 @shared_task
-def analyze_repository_task(repo_id : int):
+def analyze_repository_task(repo_id: int):
     try:
         repo = Repository.objects.get(id=repo_id)
     except Repository.DoesNotExist:
@@ -18,15 +21,14 @@ def analyze_repository_task(repo_id : int):
         os.makedirs(index_dir, exist_ok=True)
         engine.save_index(index_dir)
 
-
-        repo.status = 'completed'
-        repo.issues_indexed = result['issues_indexed']
-        repo.prs_indexed = result['prs_indexed']
-        repo.skills_found = result['skills_found']
+        repo.status = "completed"
+        repo.issues_indexed = result["issues_indexed"]
+        repo.prs_indexed = result["prs_indexed"]
+        repo.skills_found = result["skills_found"]
         repo.save()
         return result
     except Exception as e:
-        repo.status = 'failed'
+        repo.status = "failed"
         repo.error_message = str(e)
         repo.save()
         raise e
