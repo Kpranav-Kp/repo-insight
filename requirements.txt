@@ -40,3 +40,7 @@ bleach>=6.1.0
 langgraph>=0.2.0
 langchain>=0.2.0
 langchain-openai>=0.1.0
+
+# Lint and Formatting
+ruff>=0.15.9
+pre-commit>=4.5.1
