@@ -22,6 +22,7 @@ class RepositoryAnalyzeView(APIView):
             return Response(RepositorySerializer(repo).data)
         
         repo.status = "processing"
+        repo.error_message = "" 
         repo.save()
 
         async_result = analyze_repository_task.delay(repo.pk)
