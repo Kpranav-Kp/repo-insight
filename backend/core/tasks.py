@@ -22,6 +22,7 @@ def analyze_repository_task(repo_id: int):
         engine.save_index(index_dir)
 
         repo.status = "completed"
+        repo.index_path = index_dir
         repo.issues_indexed = result["issues_indexed"]
         repo.prs_indexed = result["prs_indexed"]
         repo.skills_found = result["skills_found"]
@@ -32,3 +33,16 @@ def analyze_repository_task(repo_id: int):
         repo.error_message = str(e)
         repo.save()
         raise e
+@shared_task
+def run_chat_task(session_id, current_state):
+    from .services.agents.graph import build_graph
+    graph = build_graph()
+    result = graph.invoke(current_state)
+    
+    from .models import ConversationSession
+    session = ConversationSession.objects.get(id=session_id)
+    session.state = result
+    session.phase = result.get("conversation_phase", "onboarding")
+    session.save()
+    
+    return result

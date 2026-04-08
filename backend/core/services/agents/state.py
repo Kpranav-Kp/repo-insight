@@ -1,16 +1,15 @@
 # core/services/agents/state.py
-
-from typing import TypedDict
+from typing import Dict, List, Optional, TypedDict
 
 
 class AgentState(TypedDict):
-    repo_id: int
+    repo_id: str
     repo_url: str
-    user_skills: list[dict]  # [{"skill":"python","band":"intermediate"}]
-    intent: str  # "learn" or "vibe"
-    selected_issue: dict | None
-    conversation_phase: str  # onboarding/analysis/guidance/review
-    messages: list[dict]  # full chat history
-    recommendations: list[dict]  # filled by Issue Analysis Agent
-    understanding_score: str  # SUFFICIENT / INSUFFICIENT
-    user_approach: str | None
+    user_skills: List[Dict]          # [{"skill": "python", "band": "intermediate"}]
+    intent: str                       # "learn" | "vibe"
+    selected_issue: Optional[Dict]
+    conversation_phase: str           # onboarding | analysis | guidance | review
+    messages: List[Dict]              # full chat history  {"role": "user"|"assistant", "content": "..."}
+    recommendations: List[Dict]       # filled by Issue Analysis Agent
+    understanding_score: str          # SUFFICIENT | INSUFFICIENT
+    user_approach: Optional[str]

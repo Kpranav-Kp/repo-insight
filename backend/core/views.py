@@ -1,3 +1,4 @@
+# backend/core/services/agents/views.py
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -11,7 +12,7 @@ from .serializers import (
     RecommendationSerializer,
     RepositorySerializer,
 )
-from .services.agents.graph import build_graph
+
 from .tasks import analyze_repository_task
 
 # Create your views here.
@@ -55,9 +56,12 @@ class RepositoryStatusView(APIView):
         return Response(RepositorySerializer(repo).data)
 
 
+from .tasks import analyze_repository_task, run_chat_task
+
 class ChatMessageView(APIView):
+    permission_classes = [IsAuthenticated] 
     def post(self, request):
-        # existing serializer validation stays the same
+        from .services.agents.graph import build_graph
         serializer = ChatMessageSerializer(
             data=request.data, context={"request": request}
         )
@@ -70,40 +74,20 @@ class ChatMessageView(APIView):
             ConversationSession, id=session_id, user=request.user
         )
 
-        # load current state from DB
         current_state = session.state or {}
         current_state.setdefault("messages", [])
         current_state.setdefault("conversation_phase", "onboarding")
         current_state.setdefault("repo_id", session.repository.id)
         current_state.setdefault("repo_url", session.repository.url)
-
-        # add user message
         current_state["messages"].append({"role": "user", "content": user_message})
 
-        # run through LangGraph
-        graph = build_graph()
-        result = graph.invoke(current_state)
-
-        # save updated state back to DB
-        session.state = result
-        session.phase = result.get("conversation_phase", "onboarding")
-        session.save()
-
-        # get last agent message
-        agent_message = ""
-        for m in reversed(result["messages"]):
-            if m["role"] == "assistant":
-                agent_message = m["content"]
-                break
-
-        return Response(
-            {
-                "message": agent_message,
-                "phase": session.phase,
-                "session_id": session.pk,
-            }
-        )
-
+        # ← Send to Celery, don't wait
+        task = run_chat_task.delay(session_id, current_state)
+        return Response({
+            "task_id": task.id,
+            "status": "processing",
+            "session_id": session_id,
+        }, status=status.HTTP_202_ACCEPTED)
 
 class ChatSessionView(APIView):
     permission_classes = [IsAuthenticated]
@@ -195,3 +179,23 @@ class RecommendationFeedbackView(APIView):
         rec.feedback = feedback
         rec.save()
         return Response(RecommendationSerializer(rec).data)
+
+class ChatResultView(APIView):
+    def get(self, request, task_id):
+        from celery.result import AsyncResult
+        result = AsyncResult(task_id)
+        
+        if result.ready():
+            state = result.get()
+            agent_message = ""
+            for m in reversed(state["messages"]):
+                if m["role"] == "assistant":
+                    agent_message = m["content"]
+                    break
+            return Response({
+                "status": "done",
+                "message": agent_message,
+                "phase": state.get("conversation_phase"),
+            })
+        
+        return Response({"status": "processing"})
