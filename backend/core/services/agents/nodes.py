@@ -7,12 +7,11 @@ Analysis    → recommends issues; waits for user to pick one
 Guidance    → Socratic loop; never gives code; exits when understanding = SUFFICIENT
 Review      → validates approach, checks novelty, produces PR outline
 """
+
 import json
 import logging
-from typing import List
 
 from django.conf import settings
-
 
 from ..graph_loader import load_engine_for_repo
 from .state import AgentState
@@ -24,8 +23,9 @@ logger = logging.getLogger(__name__)
 # ── LLM ───────────────────────────────────────────────────────────────────────
 
 
-def get_llm() :
+def get_llm():
     from langchain_groq import ChatGroq
+
     return ChatGroq(
         model="llama-3.1-8b-instant",
         groq_api_key=settings.GROQ_API_KEY,
@@ -33,13 +33,11 @@ def get_llm() :
     )
 
 
-def llm_respond(system_prompt: str, messages: List[dict]) -> str:
+def llm_respond(system_prompt: str, messages: list[dict]) -> str:
     """Call the LLM and return plain text."""
     llm = get_llm()
     try:
-        response = llm.invoke(
-            [{"role": "system", "content": system_prompt}, *messages]
-        )
+        response = llm.invoke([{"role": "system", "content": system_prompt}, *messages])
         return response.content.strip()
     except Exception as exc:
         logger.exception("LLM call failed: %s", exc)
@@ -49,14 +47,14 @@ def llm_respond(system_prompt: str, messages: List[dict]) -> str:
 # ── HELPERS ───────────────────────────────────────────────────────────────────
 
 
-def _last_user_message(messages: List[dict]) -> str:
+def _last_user_message(messages: list[dict]) -> str:
     for m in reversed(messages):
         if m.get("role") == "user":
             return m.get("content", "")
     return ""
 
 
-def _assistant(messages: List[dict], text: str) -> List[dict]:
+def _assistant(messages: list[dict], text: str) -> list[dict]:
     """Append an assistant message and return the updated list."""
     return [*messages, {"role": "assistant", "content": text}]
 
@@ -71,14 +69,6 @@ def _repo_id_from_url(repo_url: str) -> str:
 
 
 def onboarding_node(state: AgentState) -> AgentState:
-    """
-    Collects three pieces of information one at a time:
-      1. repo_url
-      2. user_skills  (inferred from conversation — NOT a numeric scale)
-      3. intent       (learn | vibe)
-
-    Exits to 'analysis' once all three are populated.
-    """
     messages = state.get("messages") or []
 
     # ── 1. Collect repo_url ───────────────────────────────────────────────────
@@ -91,25 +81,25 @@ def onboarding_node(state: AgentState) -> AgentState:
             """,
             messages,
         )
-        return {**state, "messages": _assistant(messages, reply), "conversation_phase": "onboarding"}
+        return {
+            **state,
+            "messages": _assistant(messages, reply),
+            "conversation_phase": "onboarding",
+        }
 
     # ── 2. Collect user_skills ────────────────────────────────────────────────
     if not state.get("user_skills"):
         last = _last_user_message(messages)
 
-        # If the last message looks like a URL, save it and ask about skills
         if last and ("github.com" in last or last.startswith("http")):
             repo_url = last.strip()
-            # Derive repo_id from URL
-            repo_id = _repo_id_from_url(repo_url)
-
             repo_skills = fetch_repo_skills.invoke(repo_url)
             reply = llm_respond(
                 f"""
                 The repository uses these skills most: {repo_skills}
                 Ask the user naturally about their experience with these specific skills.
-                Do NOT ask them to rate themselves on a numeric scale.
-                Example: 'I see this repo uses Python and REST APIs a lot — how comfortable are you with those?'
+                Do NOT ask them to rate on a numeric scale.
+                Example: 'I see this repo uses Python and REST APIs — how comfortable are you with those?'
                 ONE question only.
                 """,
                 messages,
@@ -117,26 +107,23 @@ def onboarding_node(state: AgentState) -> AgentState:
             return {
                 **state,
                 "repo_url": repo_url,
-                "repo_id": repo_id,
+                # DO NOT set repo_id here — it's already set from session
                 "messages": _assistant(messages, reply),
                 "conversation_phase": "onboarding",
             }
 
-        # Parse skills from the user's natural-language description
+        # Parse skills from natural language
         parsed_raw = llm_respond(
             """
             Based on this conversation, extract the user's skills and experience level.
-            Return ONLY valid JSON — a list of objects like:
-            [{"skill": "python", "band": "intermediate"}, {"skill": "sql", "band": "beginner"}]
-
+            Return ONLY valid JSON — a list like:
+            [{"skill": "python", "band": "intermediate"}]
             Valid bands: beginner, intermediate, comfortable.
-            Return an empty list [] if you cannot determine any skills.
-            No markdown fences, no explanation — pure JSON only.
+            Return [] if unclear. Pure JSON only, no markdown.
             """,
             messages,
         )
         try:
-            # Strip accidental markdown fences
             clean = parsed_raw.replace("```json", "").replace("```", "").strip()
             skills = json.loads(clean)
             if not isinstance(skills, list):
@@ -145,89 +132,45 @@ def onboarding_node(state: AgentState) -> AgentState:
             skills = []
 
         if skills:
-            state = {**state, "user_skills": skills}
+            # Skills collected — move to analysis, intent always = learn
+            reply = "Great! Let me find the best issues for you — one moment. 🔍"
+            return {
+                **state,
+                "user_skills": skills,
+                "intent": "learn",  # always learn
+                "messages": _assistant(messages, reply),
+                "conversation_phase": "analysis",
+            }
         else:
-            # Could not parse — ask again
             reply = llm_respond(
                 """
                 The user's skills are still unclear. Ask a gentle follow-up to understand
-                their programming background and experience. ONE question only.
+                their programming background. ONE question only.
                 """,
                 messages,
             )
-            return {**state, "messages": _assistant(messages, reply), "conversation_phase": "onboarding"}
+            return {
+                **state,
+                "messages": _assistant(messages, reply),
+                "conversation_phase": "onboarding",
+            }
 
-    # ── 3. Collect intent ─────────────────────────────────────────────────────
-    if not state.get("intent"):
-        last = _last_user_message(messages)
-
-        # Check if the last message is a skill description (not yet asked about intent)
-        # We detect this by checking if we've already asked the intent question
-        asked_intent = any(
-            "learn mode" in m.get("content", "").lower() or "vibe mode" in m.get("content", "").lower()
-            for m in messages
-            if m.get("role") == "assistant"
-        )
-
-        if not asked_intent:
-            reply = llm_respond(
-                """
-                Ask the user how they want to approach this contribution:
-
-                  Option A — Learn mode: they want to understand the codebase deeply;
-                             you will guide them with questions, never giving code.
-                  Option B — Vibe mode: they just want the solution quickly.
-
-                Be casual. ONE question only.
-                """,
-                messages,
-            )
-            return {**state, "messages": _assistant(messages, reply), "conversation_phase": "onboarding"}
-
-        # Parse intent from their reply
-        intent_raw = llm_respond(
-            """
-            Based on the last user message, did they choose:
-            - learn mode (wants to understand, guided approach)
-            - vibe mode  (wants the solution fast)
-
-            Reply with ONLY one word: learn  OR  vibe
-            """,
-            messages,
-        ).lower()
-
-        intent = "learn" if "learn" in intent_raw else "vibe"
-
-        reply = "Great! Let me find the best issues for you — one moment. 🔍"
-        return {
-            **state,
-            "messages": _assistant(messages, reply),
-            "intent": intent,
-            "conversation_phase": "analysis",
-        }
-
-    # All three collected — advance
-    return {**state, "conversation_phase": "analysis"}
+    # Already have everything — advance
+    return {**state, "intent": "learn", "conversation_phase": "analysis"}
 
 
 # ── AGENT 2: ISSUE ANALYSIS ───────────────────────────────────────────────────
 
 
 def issue_analysis_node(state: AgentState) -> AgentState:
-    """
-    1. Loads the knowledge graph for the repo and recommends issues.
-    2. Presents up to 3 issues in plain language.
-    3. Waits for the user to pick one.
-    """
     messages = state.get("messages") or []
     repo_id = state.get("repo_id")
-    skills: List[dict] = state.get("user_skills") or []
+    skills: list[dict] = state.get("user_skills") or []
     skill_names = [s["skill"] for s in skills]
 
     # ── If the user already picked an issue, route forward ───────────────────
     if state.get("selected_issue"):
-        next_phase = "guidance" if state.get("intent") == "learn" else "review"
-        return {**state, "conversation_phase": next_phase}
+        return {**state, "conversation_phase": "guidance"}  # ← fixed
 
     # ── Build recommendations once ────────────────────────────────────────────
     if not state.get("recommendations"):
@@ -242,12 +185,11 @@ def issue_analysis_node(state: AgentState) -> AgentState:
                 "messages": _assistant(messages, reply),
                 "conversation_phase": "analysis",
             }
-        # Filter by experience band
+
         band = skills[0].get("band", "beginner") if skills else "beginner"
         if band == "beginner":
             raw_results = [r for r in raw_results if len(r.get("skills", [])) <= 4]
 
-        # Annotate with novelty score
         flagged = []
         for r in raw_results:
             try:
@@ -266,8 +208,9 @@ def issue_analysis_node(state: AgentState) -> AgentState:
     # ── Check if the user just picked an issue ────────────────────────────────
     last = _last_user_message(messages)
     if last and recommendations:
-        picked = llm_respond(
-            f"""
+        picked = (
+            llm_respond(
+                f"""
             The user said: "{last}"
             Available issues (JSON): {json.dumps(recommendations)}
 
@@ -275,20 +218,22 @@ def issue_analysis_node(state: AgentState) -> AgentState:
             If YES, reply with ONLY the issue's id number (integer).
             If NO or ambiguous, reply with: none
             """,
-            messages,
-        ).strip().lower()
+                messages,
+            )
+            .strip()
+            .lower()
+        )
 
         if picked != "none":
             selected = next(
                 (r for r in recommendations if str(r.get("id")) == picked), None
             )
             if selected:
-                next_phase = "guidance" if state.get("intent") == "learn" else "review"
                 return {
                     **state,
                     "messages": messages,
                     "selected_issue": selected,
-                    "conversation_phase": next_phase,
+                    "conversation_phase": "guidance",  # ← fixed
                 }
 
     # ── Present issues ────────────────────────────────────────────────────────
@@ -310,7 +255,11 @@ def issue_analysis_node(state: AgentState) -> AgentState:
         messages,
     )
 
-    return {**state, "messages": _assistant(messages, reply), "conversation_phase": "analysis"}
+    return {
+        **state,
+        "messages": _assistant(messages, reply),
+        "conversation_phase": "analysis",
+    }
 
 
 # ── AGENT 3: GUIDANCE ─────────────────────────────────────────────────────────
@@ -462,7 +411,7 @@ def guidance_node(state: AgentState) -> AgentState:
         f"""
         Issue (JSON): {json.dumps(selected_issue)}
         Repository  : {repo_url}
-        Guidelines  : {guidelines_context[:500] if guidelines_context else 'N/A'}
+        Guidelines  : {guidelines_context[:500] if guidelines_context else "N/A"}
 
         Ask the user ONE specific question to check their understanding of this issue.
         The question should make them think about:

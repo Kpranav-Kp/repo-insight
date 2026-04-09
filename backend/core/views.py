@@ -12,7 +12,6 @@ from .serializers import (
     RecommendationSerializer,
     RepositorySerializer,
 )
-
 from .tasks import analyze_repository_task
 
 # Create your views here.
@@ -29,7 +28,7 @@ class RepositoryAnalyzeView(APIView):
             )
 
         repo, created = Repository.objects.get_or_create(url=url)
-        if repo.status == "completed":
+        if repo.status == "completed" and repo.index_path:
             return Response(RepositorySerializer(repo).data)
 
         repo.status = "processing"
@@ -56,12 +55,13 @@ class RepositoryStatusView(APIView):
         return Response(RepositorySerializer(repo).data)
 
 
-from .tasks import analyze_repository_task, run_chat_task
+from .tasks import run_chat_task
+
 
 class ChatMessageView(APIView):
-    permission_classes = [IsAuthenticated] 
+    permission_classes = [IsAuthenticated]
+
     def post(self, request):
-        from .services.agents.graph import build_graph
         serializer = ChatMessageSerializer(
             data=request.data, context={"request": request}
         )
@@ -83,11 +83,15 @@ class ChatMessageView(APIView):
 
         # ← Send to Celery, don't wait
         task = run_chat_task.delay(session_id, current_state)
-        return Response({
-            "task_id": task.id,
-            "status": "processing",
-            "session_id": session_id,
-        }, status=status.HTTP_202_ACCEPTED)
+        return Response(
+            {
+                "task_id": task.id,
+                "status": "processing",
+                "session_id": session_id,
+            },
+            status=status.HTTP_202_ACCEPTED,
+        )
+
 
 class ChatSessionView(APIView):
     permission_classes = [IsAuthenticated]
@@ -180,11 +184,13 @@ class RecommendationFeedbackView(APIView):
         rec.save()
         return Response(RecommendationSerializer(rec).data)
 
+
 class ChatResultView(APIView):
     def get(self, request, task_id):
         from celery.result import AsyncResult
+
         result = AsyncResult(task_id)
-        
+
         if result.ready():
             state = result.get()
             agent_message = ""
@@ -192,10 +198,12 @@ class ChatResultView(APIView):
                 if m["role"] == "assistant":
                     agent_message = m["content"]
                     break
-            return Response({
-                "status": "done",
-                "message": agent_message,
-                "phase": state.get("conversation_phase"),
-            })
-        
+            return Response(
+                {
+                    "status": "done",
+                    "message": agent_message,
+                    "phase": state.get("conversation_phase"),
+                }
+            )
+
         return Response({"status": "processing"})
