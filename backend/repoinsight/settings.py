@@ -164,3 +164,4 @@ os.environ["TRANSFORMERS_CACHE"] = os.getenv(
 SENTENCE_TRANSFORMER_MODEL = os.getenv(
     "SENTENCE_TRANSFORMER_MODEL", default="all-MiniLM-L6-v2"
 )
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
