@@ -56,7 +56,7 @@ def load_engine_for_repo(repo_id: int) -> RecommendationEngine:
     return engine
 
 
-def clear_cache(repo_id: int = None):
+def clear_cache(repo_id: int = 0) -> None:
     """Call this if repo is re-analyzed"""
     global _engine_cache
     if repo_id:

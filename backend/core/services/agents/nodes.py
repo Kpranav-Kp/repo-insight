@@ -28,7 +28,7 @@ def get_llm() :
     from langchain_groq import ChatGroq
     return ChatGroq(
         model="llama-3.1-8b-instant",
-        groq_api_key=settings.GROQ_API_KEY,
+        api_key=settings.GROQ_API_KEY,
         temperature=0.7,
     )
 
@@ -40,7 +40,7 @@ def llm_respond(system_prompt: str, messages: List[dict]) -> str:
         response = llm.invoke(
             [{"role": "system", "content": system_prompt}, *messages]
         )
-        return response.content.strip()
+        return str(response.content).strip()
     except Exception as exc:
         logger.exception("LLM call failed: %s", exc)
         return "I'm having trouble connecting right now. Please try again."
@@ -232,7 +232,7 @@ def issue_analysis_node(state: AgentState) -> AgentState:
     # ── Build recommendations once ────────────────────────────────────────────
     if not state.get("recommendations"):
         try:
-            engine = load_engine_for_repo(repo_id)
+            engine = load_engine_for_repo(int(repo_id))
             raw_results = engine.recommend(skill_names, top_k=5)
         except Exception as exc:
             logger.warning("Engine not ready: %s", exc)
@@ -511,7 +511,7 @@ def review_node(state: AgentState) -> AgentState:
     novelty = 1.0
     if user_approach and repo_id:
         try:
-            engine = load_engine_for_repo(repo_id)
+            engine = load_engine_for_repo(int(repo_id))
             novelty = engine.graph.novelty_score(
                 user_approach, selected_issue.get("id", "")
             )
