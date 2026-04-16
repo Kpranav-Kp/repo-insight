@@ -2,8 +2,8 @@ from django.urls import path
 
 from .views import (
     ChatMessageView,
-    ChatSessionView,
     ChatResultView,
+    ChatSessionView,
     RecommendationFeedbackView,
     RepositoryAnalyzeView,
     RepositoryStatusView,

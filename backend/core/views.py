@@ -12,8 +12,7 @@ from .serializers import (
     RecommendationSerializer,
     RepositorySerializer,
 )
-
-from .tasks import analyze_repository_task
+from .tasks import analyze_repository_task, run_chat_task
 
 # Create your views here.
 
@@ -56,12 +55,10 @@ class RepositoryStatusView(APIView):
         return Response(RepositorySerializer(repo).data)
 
 
-from .tasks import analyze_repository_task, run_chat_task
 
 class ChatMessageView(APIView):
-    permission_classes = [IsAuthenticated] 
+    permission_classes = [IsAuthenticated]
     def post(self, request):
-        from .services.agents.graph import build_graph
         serializer = ChatMessageSerializer(
             data=request.data, context={"request": request}
         )
@@ -184,7 +181,7 @@ class ChatResultView(APIView):
     def get(self, request, task_id):
         from celery.result import AsyncResult
         result = AsyncResult(task_id)
-        
+
         if result.ready():
             state = result.get()
             agent_message = ""
@@ -197,5 +194,5 @@ class ChatResultView(APIView):
                 "message": agent_message,
                 "phase": state.get("conversation_phase"),
             })
-        
+
         return Response({"status": "processing"})

@@ -9,10 +9,8 @@ Review      → validates approach, checks novelty, produces PR outline
 """
 import json
 import logging
-from typing import List
 
 from django.conf import settings
-
 
 from ..graph_loader import load_engine_for_repo
 from .state import AgentState
@@ -33,7 +31,7 @@ def get_llm() :
     )
 
 
-def llm_respond(system_prompt: str, messages: List[dict]) -> str:
+def llm_respond(system_prompt: str, messages: list[dict]) -> str:
     """Call the LLM and return plain text."""
     llm = get_llm()
     try:
@@ -49,14 +47,14 @@ def llm_respond(system_prompt: str, messages: List[dict]) -> str:
 # ── HELPERS ───────────────────────────────────────────────────────────────────
 
 
-def _last_user_message(messages: List[dict]) -> str:
+def _last_user_message(messages: list[dict]) -> str:
     for m in reversed(messages):
         if m.get("role") == "user":
             return m.get("content", "")
     return ""
 
 
-def _assistant(messages: List[dict], text: str) -> List[dict]:
+def _assistant(messages: list[dict], text: str) -> list[dict]:
     """Append an assistant message and return the updated list."""
     return [*messages, {"role": "assistant", "content": text}]
 
@@ -221,7 +219,7 @@ def issue_analysis_node(state: AgentState) -> AgentState:
     """
     messages = state.get("messages") or []
     repo_id = state.get("repo_id")
-    skills: List[dict] = state.get("user_skills") or []
+    skills: list[dict] = state.get("user_skills") or []
     skill_names = [s["skill"] for s in skills]
 
     # ── If the user already picked an issue, route forward ───────────────────
@@ -455,8 +453,9 @@ def guidance_node(state: AgentState) -> AgentState:
     guidelines_context = ""
     try:
         guidelines_context = fetch_contributing_guidelines.invoke(repo_url)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Could not fetch guidelines: %s", e)
+        guidelines_context = ""
 
     reply = llm_respond(
         f"""

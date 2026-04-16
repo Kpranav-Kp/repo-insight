@@ -17,7 +17,6 @@ class SearchResult:
 
 class EmbeddingService:
     def __init__(self, model_name: str = "all-MiniLM-L6-v2", dimension: int = 384):
-        from sentence_transformers import SentenceTransformer
         self.model_name = model_name
         self.dimension = dimension
         self._model = None

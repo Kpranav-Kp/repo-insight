@@ -1,6 +1,5 @@
 # core/services/agents/tools.py
 from collections import Counter
-from typing import List
 
 import requests as http_requests
 from django.conf import settings
@@ -12,7 +11,7 @@ extractor = SkillExtractor()
 
 
 @tool
-def fetch_repo_skills(repo_url: str) -> List[str]:
+def fetch_repo_skills(repo_url: str) -> list[str]:
     """Fetch the top skills needed to contribute to this GitHub repository."""
     token = getattr(settings, "GITHUB_TOKEN", "")
     try:
@@ -32,7 +31,7 @@ def fetch_repo_skills(repo_url: str) -> List[str]:
     if response.status_code != 200:
         return []
 
-    all_skills: List[str] = []
+    all_skills: list[str] = []
     for issue in response.json():
         if "pull_request" in issue:
             continue

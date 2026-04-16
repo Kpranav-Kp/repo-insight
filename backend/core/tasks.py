@@ -38,11 +38,11 @@ def run_chat_task(session_id, current_state):
     from .services.agents.graph import build_graph
     graph = build_graph()
     result = graph.invoke(current_state)
-    
+
     from .models import ConversationSession
     session = ConversationSession.objects.get(id=session_id)
     session.state = result
     session.phase = result.get("conversation_phase", "onboarding")
     session.save()
-    
+
     return result
