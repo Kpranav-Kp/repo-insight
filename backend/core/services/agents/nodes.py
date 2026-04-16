@@ -7,6 +7,7 @@ Analysis    → recommends issues; waits for user to pick one
 Guidance    → Socratic loop; never gives code; exits when understanding = SUFFICIENT
 Review      → validates approach, checks novelty, produces PR outline
 """
+
 import json
 import logging
 
@@ -22,8 +23,9 @@ logger = logging.getLogger(__name__)
 # ── LLM ───────────────────────────────────────────────────────────────────────
 
 
-def get_llm() :
+def get_llm():
     from langchain_groq import ChatGroq
+
     return ChatGroq(
         model="llama-3.1-8b-instant",
         api_key=settings.GROQ_API_KEY,
@@ -35,9 +37,7 @@ def llm_respond(system_prompt: str, messages: list[dict]) -> str:
     """Call the LLM and return plain text."""
     llm = get_llm()
     try:
-        response = llm.invoke(
-            [{"role": "system", "content": system_prompt}, *messages]
-        )
+        response = llm.invoke([{"role": "system", "content": system_prompt}, *messages])
         return str(response.content).strip()
     except Exception as exc:
         logger.exception("LLM call failed: %s", exc)
@@ -89,7 +89,11 @@ def onboarding_node(state: AgentState) -> AgentState:
             """,
             messages,
         )
-        return {**state, "messages": _assistant(messages, reply), "conversation_phase": "onboarding"}
+        return {
+            **state,
+            "messages": _assistant(messages, reply),
+            "conversation_phase": "onboarding",
+        }
 
     # ── 2. Collect user_skills ────────────────────────────────────────────────
     if not state.get("user_skills"):
@@ -153,7 +157,11 @@ def onboarding_node(state: AgentState) -> AgentState:
                 """,
                 messages,
             )
-            return {**state, "messages": _assistant(messages, reply), "conversation_phase": "onboarding"}
+            return {
+                **state,
+                "messages": _assistant(messages, reply),
+                "conversation_phase": "onboarding",
+            }
 
     # ── 3. Collect intent ─────────────────────────────────────────────────────
     if not state.get("intent"):
@@ -162,7 +170,8 @@ def onboarding_node(state: AgentState) -> AgentState:
         # Check if the last message is a skill description (not yet asked about intent)
         # We detect this by checking if we've already asked the intent question
         asked_intent = any(
-            "learn mode" in m.get("content", "").lower() or "vibe mode" in m.get("content", "").lower()
+            "learn mode" in m.get("content", "").lower()
+            or "vibe mode" in m.get("content", "").lower()
             for m in messages
             if m.get("role") == "assistant"
         )
@@ -180,7 +189,11 @@ def onboarding_node(state: AgentState) -> AgentState:
                 """,
                 messages,
             )
-            return {**state, "messages": _assistant(messages, reply), "conversation_phase": "onboarding"}
+            return {
+                **state,
+                "messages": _assistant(messages, reply),
+                "conversation_phase": "onboarding",
+            }
 
         # Parse intent from their reply
         intent_raw = llm_respond(
@@ -264,8 +277,9 @@ def issue_analysis_node(state: AgentState) -> AgentState:
     # ── Check if the user just picked an issue ────────────────────────────────
     last = _last_user_message(messages)
     if last and recommendations:
-        picked = llm_respond(
-            f"""
+        picked = (
+            llm_respond(
+                f"""
             The user said: "{last}"
             Available issues (JSON): {json.dumps(recommendations)}
 
@@ -273,8 +287,11 @@ def issue_analysis_node(state: AgentState) -> AgentState:
             If YES, reply with ONLY the issue's id number (integer).
             If NO or ambiguous, reply with: none
             """,
-            messages,
-        ).strip().lower()
+                messages,
+            )
+            .strip()
+            .lower()
+        )
 
         if picked != "none":
             selected = next(
@@ -308,7 +325,11 @@ def issue_analysis_node(state: AgentState) -> AgentState:
         messages,
     )
 
-    return {**state, "messages": _assistant(messages, reply), "conversation_phase": "analysis"}
+    return {
+        **state,
+        "messages": _assistant(messages, reply),
+        "conversation_phase": "analysis",
+    }
 
 
 # ── AGENT 3: GUIDANCE ─────────────────────────────────────────────────────────
@@ -461,7 +482,7 @@ def guidance_node(state: AgentState) -> AgentState:
         f"""
         Issue (JSON): {json.dumps(selected_issue)}
         Repository  : {repo_url}
-        Guidelines  : {guidelines_context[:500] if guidelines_context else 'N/A'}
+        Guidelines  : {guidelines_context[:500] if guidelines_context else "N/A"}
 
         Ask the user ONE specific question to check their understanding of this issue.
         The question should make them think about:

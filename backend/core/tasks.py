@@ -33,13 +33,17 @@ def analyze_repository_task(repo_id: int):
         repo.error_message = str(e)
         repo.save()
         raise e
+
+
 @shared_task
 def run_chat_task(session_id, current_state):
     from .services.agents.graph import build_graph
+
     graph = build_graph()
     result = graph.invoke(current_state)
 
     from .models import ConversationSession
+
     session = ConversationSession.objects.get(id=session_id)
     session.state = result
     session.phase = result.get("conversation_phase", "onboarding")
