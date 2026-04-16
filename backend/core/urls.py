@@ -3,6 +3,7 @@ from django.urls import path
 from .views import (
     ChatMessageView,
     ChatSessionView,
+    ChatResultView,
     RecommendationFeedbackView,
     RepositoryAnalyzeView,
     RepositoryStatusView,
@@ -25,4 +26,5 @@ urlpatterns = [
         "recommendations/<int:recommendation_id>/feedback/",
         RecommendationFeedbackView.as_view(),
     ),
+    path("chat/result/<str:task_id>/", ChatResultView.as_view()),
 ]
