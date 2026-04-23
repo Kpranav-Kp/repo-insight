@@ -5,10 +5,11 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import ConversationSession, Recommendation, Repository
+from .models import ConversationSession, LearnerProfile, Recommendation, Repository
 from .serializers import (
     ChatMessageSerializer,
     ConversationSessionSerializer,
+    LearnerProfileSerializer,
     RecommendationSerializer,
     RepositorySerializer,
 )
@@ -111,7 +112,6 @@ class ChatSessionView(APIView):
                     "repo_id": repo.pk,
                     "repo_url": repo.url,
                     "user_skills": [],
-                    "intent": "",
                     "selected_issue": None,
                     "conversation_phase": "onboarding",
                     "messages": [],
@@ -166,3 +166,37 @@ class ChatResultView(APIView):
                 )
 
         return Response({"status": "processing"})
+
+
+class UpdateSessionSkillsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request, session_id):
+        session = get_object_or_404(
+            ConversationSession, id=session_id, user=request.user
+        )
+        skills = request.data.get("skills")
+        if not isinstance(skills, list):
+            return Response(
+                {"error": "skills must be a list"}, status=status.HTTP_400_BAD_REQUEST
+            )
+        current_state = session.state or {}
+        current_state["user_skills"] = skills
+        session.state = current_state
+        session.save(update_fields=["state"])
+        return Response({"status": "skills updated"})
+
+
+class LearnerProfileView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        profile, _ = LearnerProfile.objects.get_or_create(user=request.user)
+        return Response(LearnerProfileSerializer(profile).data)
+
+    def patch(self, request):
+        profile, _ = LearnerProfile.objects.get_or_create(user=request.user)
+        serializer = LearnerProfileSerializer(profile, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)

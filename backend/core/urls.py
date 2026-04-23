@@ -4,9 +4,11 @@ from .views import (
     ChatMessageView,
     ChatResultView,
     ChatSessionView,
+    LearnerProfileView,
     RecommendationFeedbackView,
     RepositoryAnalyzeView,
     RepositoryStatusView,
+    UpdateSessionSkillsView,
 )
 
 urlpatterns = [
@@ -22,9 +24,20 @@ urlpatterns = [
     ),
     path("chat/session/", ChatSessionView.as_view(), name="chat-session"),
     path("chat/message/", ChatMessageView.as_view(), name="chat-message"),
+    path("chat/result/<str:task_id>/", ChatResultView.as_view(), name="chat-result"),
+    path(
+        "chat/session/<int:session_id>/skills/",
+        UpdateSessionSkillsView.as_view(),
+        name="update-session-skills",
+    ),
+    path(
+        "learner-profile/",
+        LearnerProfileView.as_view(),
+        name="learner-profile",
+    ),
     path(
         "recommendations/<int:recommendation_id>/feedback/",
         RecommendationFeedbackView.as_view(),
+        name="recommendation-feedback",
     ),
-    path("chat/result/<str:task_id>/", ChatResultView.as_view()),
 ]
