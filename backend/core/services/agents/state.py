@@ -3,7 +3,7 @@ from typing import TypedDict
 
 
 class AgentState(TypedDict):
-    repo_id: str
+    repo_id: int
     repo_url: str
     user_skills: list[dict]  # [{"skill": "python", "band": "intermediate"}]
     intent: str  # "learn" | "vibe"

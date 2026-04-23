@@ -70,41 +70,23 @@ def _repo_id_from_url(repo_url: str) -> str:
 
 def onboarding_node(state: AgentState) -> AgentState:
     """
-    Collects three pieces of information one at a time:
-      1. repo_url
-      2. user_skills  (inferred from conversation — NOT a numeric scale)
-      3. intent       (learn | vibe)
-
-    Exits to 'analysis' once all three are populated.
+    Collects user_skills and intent only.
+    repo_url and repo_id are already in state from the session.
     """
     messages = state.get("messages") or []
+    repo_url = state.get("repo_url")
 
-    # ── 1. Collect repo_url ───────────────────────────────────────────────────
-    if not state.get("repo_url"):
-        reply = llm_respond(
-            """
-            You are helping a developer find open-source issues to contribute to.
-            Ask them for the GitHub repository URL they want to contribute to.
-            Be friendly and conversational. Ask ONE question only.
-            """,
-            messages,
-        )
+    if not repo_url:
+        reply = "Please provide the GitHub repository URL you want to contribute to."
         return {
             **state,
             "messages": _assistant(messages, reply),
             "conversation_phase": "onboarding",
         }
 
-    # ── 2. Collect user_skills ────────────────────────────────────────────────
+    # ── 2. Collect user_skills (no URL detection) ────────────────────────────
     if not state.get("user_skills"):
-        last = _last_user_message(messages)
-
-        # If the last message looks like a URL, save it and ask about skills
-        if last and ("github.com" in last or last.startswith("http")):
-            repo_url = last.strip()
-            # Derive repo_id from URL
-            repo_id = _repo_id_from_url(repo_url)
-
+        if len(messages) <= 1:
             repo_skills = fetch_repo_skills.invoke(repo_url)
             reply = llm_respond(
                 f"""
@@ -118,13 +100,10 @@ def onboarding_node(state: AgentState) -> AgentState:
             )
             return {
                 **state,
-                "repo_url": repo_url,
-                "repo_id": repo_id,
                 "messages": _assistant(messages, reply),
                 "conversation_phase": "onboarding",
             }
 
-        # Parse skills from the user's natural-language description
         parsed_raw = llm_respond(
             """
             Based on this conversation, extract the user's skills and experience level.
@@ -138,7 +117,6 @@ def onboarding_node(state: AgentState) -> AgentState:
             messages,
         )
         try:
-            # Strip accidental markdown fences
             clean = parsed_raw.replace("```json", "").replace("```", "").strip()
             skills = json.loads(clean)
             if not isinstance(skills, list):
@@ -149,7 +127,6 @@ def onboarding_node(state: AgentState) -> AgentState:
         if skills:
             state = {**state, "user_skills": skills}
         else:
-            # Could not parse — ask again
             reply = llm_respond(
                 """
                 The user's skills are still unclear. Ask a gentle follow-up to understand
@@ -165,10 +142,6 @@ def onboarding_node(state: AgentState) -> AgentState:
 
     # ── 3. Collect intent ─────────────────────────────────────────────────────
     if not state.get("intent"):
-        last = _last_user_message(messages)
-
-        # Check if the last message is a skill description (not yet asked about intent)
-        # We detect this by checking if we've already asked the intent question
         asked_intent = any(
             "learn mode" in m.get("content", "").lower()
             or "vibe mode" in m.get("content", "").lower()
@@ -195,7 +168,6 @@ def onboarding_node(state: AgentState) -> AgentState:
                 "conversation_phase": "onboarding",
             }
 
-        # Parse intent from their reply
         intent_raw = llm_respond(
             """
             Based on the last user message, did they choose:
@@ -217,7 +189,6 @@ def onboarding_node(state: AgentState) -> AgentState:
             "conversation_phase": "analysis",
         }
 
-    # All three collected — advance
     return {**state, "conversation_phase": "analysis"}
 
 
@@ -243,7 +214,7 @@ def issue_analysis_node(state: AgentState) -> AgentState:
     # ── Build recommendations once ────────────────────────────────────────────
     if not state.get("recommendations"):
         try:
-            engine = load_engine_for_repo(int(repo_id))
+            engine = load_engine_for_repo(repo_id)
             raw_results = engine.recommend(skill_names, top_k=5)
         except Exception as exc:
             logger.warning("Engine not ready: %s", exc)
@@ -531,7 +502,7 @@ def review_node(state: AgentState) -> AgentState:
     novelty = 1.0
     if user_approach and repo_id:
         try:
-            engine = load_engine_for_repo(int(repo_id))
+            engine = load_engine_for_repo(repo_id)
             novelty = engine.graph.novelty_score(
                 user_approach, selected_issue.get("id", "")
             )
