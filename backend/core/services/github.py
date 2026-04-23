@@ -38,6 +38,8 @@ class PRData:
     body: str
     state: str
     linked_issue_numbers: list[int]
+    created_at: str  # ISO 8601 format
+    merged_at: str | None = None
 
 
 class GitHubClient:
@@ -74,7 +76,7 @@ class GitHubClient:
         reraise=True,
     )
     def fetch_issues(
-        self, repo_url: str, limit: int = 50, state: str = "open"
+        self, repo_url: str, limit: int, state: str = "open"
     ) -> list[IssueData]:
         owner, repo = self._parse_repo_url(repo_url)
         url = f"https://api.github.com/repos/{owner}/{repo}/issues"
@@ -121,7 +123,7 @@ class GitHubClient:
         reraise=True,
     )
     def fetch_pull_requests(
-        self, repo_url: str, limit: int = 20, state: str = "closed"
+        self, repo_url: str, limit: int, state: str = "closed"
     ) -> list[PRData]:
         owner, repo = self._parse_repo_url(repo_url)
         url = f"https://api.github.com/repos/{owner}/{repo}/pulls"
@@ -146,6 +148,8 @@ class GitHubClient:
             for item in batch:
                 text = f"{item.get('title', '')} {item.get('body', '')}"
                 linked_issues = self._extract_linked_issues(text)
+                created_at = item.get("created_at")
+                merged_at = item.get("merged_at")
 
                 if len(prs) >= limit:
                     break
@@ -166,6 +170,8 @@ class GitHubClient:
                         body=item.get("body", "") or "",
                         state=pr_state,
                         linked_issue_numbers=linked_issues,
+                        created_at=created_at,
+                        merged_at=merged_at,
                     )
                 )
             page += 1

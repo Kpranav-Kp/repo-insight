@@ -170,3 +170,5 @@ OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+GITHUB_ISSUE_LIMIT = int(os.getenv("GITHUB_ISSUE_LIMIT", 300))
+GITHUB_PR_LIMIT = int(os.getenv("GITHUB_PR_LIMIT", 150))
