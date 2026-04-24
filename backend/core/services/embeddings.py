@@ -1,6 +1,7 @@
 # embeddings.py
 import json
 import os
+from collections import OrderedDict
 from dataclasses import dataclass
 
 import faiss
@@ -24,6 +25,8 @@ class EmbeddingService:
         self.metadata = {}
         self.id_to_index = {}
         self.index_to_id = {}
+        self._cache = OrderedDict()
+        self._cache_maxsize = 1000
 
     @property
     def model(self) -> SentenceTransformer:
@@ -35,6 +38,12 @@ class EmbeddingService:
         if isinstance(texts, str):
             texts = [texts]
 
+        if len(texts) == 1:
+            key = texts[0].strip()
+            if key in self._cache:
+                self._cache.move_to_end(key)
+                return self._cache[key]
+
         texts = [t.strip() if t else "" for t in texts]
 
         embeddings = self.model.encode(
@@ -43,7 +52,16 @@ class EmbeddingService:
             show_progress_bar=False,
             convert_to_numpy=True,
         )
-        return embeddings.astype("float32")
+
+        vectors = embeddings.astype("float32")
+
+        if len(texts) == 1:
+            key = texts[0]
+            self._cache[key] = vectors
+            if len(self._cache) > self._cache_maxsize:
+                self._cache.popitem(last=False)
+
+        return vectors
 
     def build_index(self, items: list[tuple[str, str, dict]]):
         if not items:
