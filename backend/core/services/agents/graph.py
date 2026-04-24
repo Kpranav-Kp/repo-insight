@@ -1,6 +1,7 @@
 from langgraph.graph import END, StateGraph
 
 from .nodes import (
+    code_assist_node,
     guidance_node,
     issue_analysis_node,
     onboarding_node,
@@ -35,6 +36,8 @@ def route_after_analysis(state: AgentState) -> str:
 
 def route_after_guidance(state: AgentState) -> str:
     phase = state.get("conversation_phase", "guidance")
+    if phase == "code_assist":
+        return "code_assist"
     if phase == "review":
         return "review"
     if phase == "complete":
@@ -51,6 +54,7 @@ def build_graph():
     graph.add_node("onboarding", onboarding_node)
     graph.add_node("issue_analysis", issue_analysis_node)
     graph.add_node("guidance", guidance_node)
+    graph.add_node("code_assist", code_assist_node)
     graph.add_node("review", review_node)
 
     graph.set_entry_point("onboarding")
@@ -64,6 +68,7 @@ def build_graph():
             END: END,
         },
     )
+
     graph.add_conditional_edges(
         "issue_analysis",
         route_after_analysis,
@@ -74,16 +79,19 @@ def build_graph():
             END: END,
         },
     )
+
     graph.add_conditional_edges(
         "guidance",
         route_after_guidance,
         {
             "guidance": "guidance",
+            "code_assist": "code_assist",
             "review": "review",
             END: END,
         },
     )
 
+    graph.add_edge("code_assist", "guidance")
     graph.add_edge("review", END)
 
     return graph.compile()

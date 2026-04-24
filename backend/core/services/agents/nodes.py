@@ -271,7 +271,7 @@ def guidance_node(state: AgentState) -> AgentState:
       1. Check for skill gaps → provide learning path if gaps exist.
       2. Ask a targeted understanding question.
       3. Evaluate the user's answer.
-         - INSUFFICIENT → ask sharper follow-up (detect vibe-coding).
+         - INSUFFICIENT → increment stuck_counter; if >=2 or user asks "stuck/hint", go to code_assist.
          - SUFFICIENT + genuine → advance to review.
          - SUFFICIENT + vibe-coded → ask a more specific follow-up.
     """
@@ -352,25 +352,35 @@ def guidance_node(state: AgentState) -> AgentState:
                     "conversation_phase": "guidance",
                 }
 
-        # INSUFFICIENT — generate a targeted follow-up
-        reply = llm_respond(
-            f"""
-            Issue: {json.dumps(selected_issue)}
-            User's answer: "{last}"
+        # INSUFFICIENT — increment stuck counter and decide whether to offer code assist
+        stuck = state.get("stuck_counter", 0) + 1
+        # if user explicitly asks for help, or has been stuck twice, go to code assist
+        if stuck >= 2 or "stuck" in last.lower() or "hint" in last.lower():
+            return {
+                **state,
+                "stuck_counter": stuck,
+                "conversation_phase": "code_assist",
+            }
+        else:
+            reply = llm_respond(
+                f"""
+                Issue: {json.dumps(selected_issue)}
+                User's answer: "{last}"
 
-            Their answer was too vague. Ask ONE targeted follow-up question that pushes
-            them to think about:
-              - The specific file or module involved
-              - The root cause of the problem
-            Do NOT give any code or reveal the answer.
-            """,
-            messages,
-        )
-        return {
-            **state,
-            "messages": _assistant(messages, reply),
-            "conversation_phase": "guidance",
-        }
+                Their answer was too vague. Ask ONE targeted follow-up question that pushes
+                them to think about:
+                  - The specific file or module involved
+                  - The root cause of the problem
+                Do NOT give any code or reveal the answer.
+                """,
+                messages,
+            )
+            return {
+                **state,
+                "stuck_counter": stuck,
+                "messages": _assistant(messages, reply),
+                "conversation_phase": "guidance",
+            }
 
     # ── Skill-gap learning path (first visit, no answer yet) ─────────────────
     gaps = [s for s in issue_skills if s not in user_skills_list]
@@ -501,4 +511,62 @@ def review_node(state: AgentState) -> AgentState:
         **state,
         "messages": _assistant(messages, reply),
         "conversation_phase": "complete",
+    }
+
+
+def code_assist_node(state: AgentState) -> AgentState:
+    """
+    Provides boilerplate with TODOs, limited to MAX_ASSISTS per session.
+    Increments code_assist_count; refuses after limit.
+    """
+    messages = state.get("messages") or []
+    selected_issue = state.get("selected_issue") or {}
+    repo_url = state.get("repo_url", "")
+    code_assist_count = state.get("code_assist_count", 0)
+    MAX_ASSISTS = 3
+
+    if code_assist_count >= MAX_ASSISTS:
+        reply = (
+            "You've already received code assistance a few times. "
+            "Open source contribution is about learning by doing. "
+            "Try to complete the TODOs from the previous snippet or ask me a specific question. "
+            "I won't provide more code to ensure you truly understand the process."
+        )
+        return {
+            **state,
+            "messages": _assistant(messages, reply),
+            "conversation_phase": "guidance",
+            "code_assist_count": code_assist_count,
+        }
+
+    # Generate boilerplate with TODOs
+    reply = llm_respond(
+        f"""
+        Issue: {json.dumps(selected_issue)}
+        Repository: {repo_url}
+        User's previous understanding: {state.get("understanding_score", "unknown")}
+
+        The user is stuck. Provide a **boilerplate code snippet** that outlines the structure needed.
+        - Include **`# TODO:` comments** for every part the user must fill in.
+        - Do NOT give a complete solution.
+        - Add a note that the user must write the actual logic themselves.
+        - Keep the code short and directly relevant to the issue.
+
+        Example format:
+        ```python
+        def fix_problem(param):
+            # TODO: Understand what 'param' does and implement the core logic
+            pass
+        End with a question asking them to try filling the TODOs.
+        """,
+        messages,
+    )
+    new_count = code_assist_count + 1
+    logger.info(f"Code assist provided. Count now {new_count}/{MAX_ASSISTS}")
+
+    return {
+        **state,
+        "messages": _assistant(messages, reply),
+        "code_assist_count": new_count,
+        "conversation_phase": "guidance",
     }
