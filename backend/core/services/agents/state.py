@@ -6,8 +6,9 @@ class AgentState(TypedDict):
     repo_id: int
     repo_url: str
     user_skills: list[dict]  # [{"skill": "python", "band": "intermediate"}]
-    intent: str  # "learn" | "vibe"
     selected_issue: dict | None
+    code_assist_count: int
+    stuck_counter: int
     conversation_phase: str  # onboarding | analysis | guidance | review
     messages: list[
         dict

@@ -3,7 +3,8 @@ import os
 from celery import shared_task
 from django.conf import settings
 
-from .models import Repository
+from .models import ConversationSession, Repository
+from .services.agents.graph import build_graph
 from .services.recommender import RecommendationEngine
 
 
@@ -37,16 +38,20 @@ def analyze_repository_task(repo_id: int):
 
 @shared_task
 def run_chat_task(session_id, current_state):
-    from .services.agents.graph import build_graph
+    session = ConversationSession.objects.get(id=session_id)
+    current_state["code_assit_count"] = session.code_assist_count
+    current_state["stuck_counter"] = session.stuck_counter
 
     graph = build_graph()
     result = graph.invoke(current_state)
 
-    from .models import ConversationSession
-
-    session = ConversationSession.objects.get(id=session_id)
     session.state = result
     session.phase = result.get("conversation_phase", "onboarding")
+
+    session.code_assist_count = result.get(
+        "code_assist_count", session.code_assist_count
+    )
+    session.stuck_counter = result.get("stuck_counter", session.stuck_counter)
     session.save()
 
     return result

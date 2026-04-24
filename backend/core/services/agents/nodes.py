@@ -140,52 +140,10 @@ def onboarding_node(state: AgentState) -> AgentState:
                 "conversation_phase": "onboarding",
             }
 
-    # ── 3. Collect intent ─────────────────────────────────────────────────────
-    if not state.get("intent"):
-        asked_intent = any(
-            "learn mode" in m.get("content", "").lower()
-            or "vibe mode" in m.get("content", "").lower()
-            for m in messages
-            if m.get("role") == "assistant"
-        )
-
-        if not asked_intent:
-            reply = llm_respond(
-                """
-                Ask the user how they want to approach this contribution:
-
-                  Option A — Learn mode: they want to understand the codebase deeply;
-                             you will guide them with questions, never giving code.
-                  Option B — Vibe mode: they just want the solution quickly.
-
-                Be casual. ONE question only.
-                """,
-                messages,
-            )
-            return {
-                **state,
-                "messages": _assistant(messages, reply),
-                "conversation_phase": "onboarding",
-            }
-
-        intent_raw = llm_respond(
-            """
-            Based on the last user message, did they choose:
-            - learn mode (wants to understand, guided approach)
-            - vibe mode  (wants the solution fast)
-
-            Reply with ONLY one word: learn  OR  vibe
-            """,
-            messages,
-        ).lower()
-
-        intent = "learn" if "learn" in intent_raw else "vibe"
-
         reply = "Great! Let me find the best issues for you — one moment. 🔍"
         return {
             **state,
             "messages": _assistant(messages, reply),
-            "intent": intent,
             "conversation_phase": "analysis",
         }
 
@@ -208,8 +166,7 @@ def issue_analysis_node(state: AgentState) -> AgentState:
 
     # ── If the user already picked an issue, route forward ───────────────────
     if state.get("selected_issue"):
-        next_phase = "guidance" if state.get("intent") == "learn" else "review"
-        return {**state, "conversation_phase": next_phase}
+        return {**state, "conversation_phase": "guidance"}
 
     # ── Build recommendations once ────────────────────────────────────────────
     if not state.get("recommendations"):
@@ -269,7 +226,7 @@ def issue_analysis_node(state: AgentState) -> AgentState:
                 (r for r in recommendations if str(r.get("id")) == picked), None
             )
             if selected:
-                next_phase = "guidance" if state.get("intent") == "learn" else "review"
+                next_phase = "guidance"
                 return {
                     **state,
                     "messages": messages,
