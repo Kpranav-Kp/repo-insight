@@ -21,3 +21,11 @@ repos:
         exclude: "^frontend/"
       - id: debug-statements
         exclude: "^frontend/"
+
+  - repo: local
+    hooks:
+      - id: eslint-frontend
+        name: ESLint (frontend)
+        entry: bash -c 'cd frontend && npx eslint --fix'
+        language: system
+        files: '^frontend/.*\.(js|jsx)$'
