@@ -28,7 +28,7 @@ def get_llm():
 
     return ChatGroq(
         model="llama-3.1-8b-instant",
-        groq_api_key=settings.GROQ_API_KEY,
+        api_key=settings.GROQ_API_KEY,
         temperature=0.7,
     )
 
@@ -38,7 +38,7 @@ def llm_respond(system_prompt: str, messages: list[dict]) -> str:
     llm = get_llm()
     try:
         response = llm.invoke([{"role": "system", "content": system_prompt}, *messages])
-        return response.content.strip()
+        return str(response.content).strip()
     except Exception as exc:
         logger.exception("LLM call failed: %s", exc)
         return "I'm having trouble connecting right now. Please try again."
@@ -69,30 +69,24 @@ def _repo_id_from_url(repo_url: str) -> str:
 
 
 def onboarding_node(state: AgentState) -> AgentState:
+    """
+    Collects user_skills and intent only.
+    repo_url and repo_id are already in state from the session.
+    """
     messages = state.get("messages") or []
+    repo_url = state.get("repo_url")
 
-    # ── 1. Collect repo_url ───────────────────────────────────────────────────
-    if not state.get("repo_url"):
-        reply = llm_respond(
-            """
-            You are helping a developer find open-source issues to contribute to.
-            Ask them for the GitHub repository URL they want to contribute to.
-            Be friendly and conversational. Ask ONE question only.
-            """,
-            messages,
-        )
+    if not repo_url:
+        reply = "Please provide the GitHub repository URL you want to contribute to."
         return {
             **state,
             "messages": _assistant(messages, reply),
             "conversation_phase": "onboarding",
         }
 
-    # ── 2. Collect user_skills ────────────────────────────────────────────────
+    # ── 2. Collect user_skills (no URL detection) ────────────────────────────
     if not state.get("user_skills"):
-        last = _last_user_message(messages)
-
-        if last and ("github.com" in last or last.startswith("http")):
-            repo_url = last.strip()
+        if len(messages) <= 1:
             repo_skills = fetch_repo_skills.invoke(repo_url)
             reply = llm_respond(
                 f"""
@@ -106,13 +100,10 @@ def onboarding_node(state: AgentState) -> AgentState:
             )
             return {
                 **state,
-                "repo_url": repo_url,
-                # DO NOT set repo_id here — it's already set from session
                 "messages": _assistant(messages, reply),
                 "conversation_phase": "onboarding",
             }
 
-        # Parse skills from natural language
         parsed_raw = llm_respond(
             """
             Based on this conversation, extract the user's skills and experience level.
@@ -145,7 +136,7 @@ def onboarding_node(state: AgentState) -> AgentState:
             reply = llm_respond(
                 """
                 The user's skills are still unclear. Ask a gentle follow-up to understand
-                their programming background. ONE question only.
+                their programming background and experience. ONE question only.
                 """,
                 messages,
             )
@@ -155,8 +146,14 @@ def onboarding_node(state: AgentState) -> AgentState:
                 "conversation_phase": "onboarding",
             }
 
-    # Already have everything — advance
-    return {**state, "intent": "learn", "conversation_phase": "analysis"}
+        reply = "Great! Let me find the best issues for you — one moment. 🔍"
+        return {
+            **state,
+            "messages": _assistant(messages, reply),
+            "conversation_phase": "analysis",
+        }
+
+    return {**state, "conversation_phase": "analysis"}
 
 
 # ── AGENT 2: ISSUE ANALYSIS ───────────────────────────────────────────────────
@@ -170,7 +167,7 @@ def issue_analysis_node(state: AgentState) -> AgentState:
 
     # ── If the user already picked an issue, route forward ───────────────────
     if state.get("selected_issue"):
-        return {**state, "conversation_phase": "guidance"}  # ← fixed
+        return {**state, "conversation_phase": "guidance"}
 
     # ── Build recommendations once ────────────────────────────────────────────
     if not state.get("recommendations"):
@@ -229,6 +226,7 @@ def issue_analysis_node(state: AgentState) -> AgentState:
                 (r for r in recommendations if str(r.get("id")) == picked), None
             )
             if selected:
+                next_phase = "guidance"
                 return {
                     **state,
                     "messages": messages,
@@ -273,7 +271,7 @@ def guidance_node(state: AgentState) -> AgentState:
       1. Check for skill gaps → provide learning path if gaps exist.
       2. Ask a targeted understanding question.
       3. Evaluate the user's answer.
-         - INSUFFICIENT → ask sharper follow-up (detect vibe-coding).
+         - INSUFFICIENT → increment stuck_counter; if >=2 or user asks "stuck/hint", go to code_assist.
          - SUFFICIENT + genuine → advance to review.
          - SUFFICIENT + vibe-coded → ask a more specific follow-up.
     """
@@ -354,25 +352,35 @@ def guidance_node(state: AgentState) -> AgentState:
                     "conversation_phase": "guidance",
                 }
 
-        # INSUFFICIENT — generate a targeted follow-up
-        reply = llm_respond(
-            f"""
-            Issue: {json.dumps(selected_issue)}
-            User's answer: "{last}"
+        # INSUFFICIENT — increment stuck counter and decide whether to offer code assist
+        stuck = state.get("stuck_counter", 0) + 1
+        # if user explicitly asks for help, or has been stuck twice, go to code assist
+        if stuck >= 2 or "stuck" in last.lower() or "hint" in last.lower():
+            return {
+                **state,
+                "stuck_counter": stuck,
+                "conversation_phase": "code_assist",
+            }
+        else:
+            reply = llm_respond(
+                f"""
+                Issue: {json.dumps(selected_issue)}
+                User's answer: "{last}"
 
-            Their answer was too vague. Ask ONE targeted follow-up question that pushes
-            them to think about:
-              - The specific file or module involved
-              - The root cause of the problem
-            Do NOT give any code or reveal the answer.
-            """,
-            messages,
-        )
-        return {
-            **state,
-            "messages": _assistant(messages, reply),
-            "conversation_phase": "guidance",
-        }
+                Their answer was too vague. Ask ONE targeted follow-up question that pushes
+                them to think about:
+                  - The specific file or module involved
+                  - The root cause of the problem
+                Do NOT give any code or reveal the answer.
+                """,
+                messages,
+            )
+            return {
+                **state,
+                "stuck_counter": stuck,
+                "messages": _assistant(messages, reply),
+                "conversation_phase": "guidance",
+            }
 
     # ── Skill-gap learning path (first visit, no answer yet) ─────────────────
     gaps = [s for s in issue_skills if s not in user_skills_list]
@@ -404,8 +412,9 @@ def guidance_node(state: AgentState) -> AgentState:
     guidelines_context = ""
     try:
         guidelines_context = fetch_contributing_guidelines.invoke(repo_url)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Could not fetch guidelines: %s", e)
+        guidelines_context = ""
 
     reply = llm_respond(
         f"""
@@ -502,4 +511,62 @@ def review_node(state: AgentState) -> AgentState:
         **state,
         "messages": _assistant(messages, reply),
         "conversation_phase": "complete",
+    }
+
+
+def code_assist_node(state: AgentState) -> AgentState:
+    """
+    Provides boilerplate with TODOs, limited to MAX_ASSISTS per session.
+    Increments code_assist_count; refuses after limit.
+    """
+    messages = state.get("messages") or []
+    selected_issue = state.get("selected_issue") or {}
+    repo_url = state.get("repo_url", "")
+    code_assist_count = state.get("code_assist_count", 0)
+    MAX_ASSISTS = 3
+
+    if code_assist_count >= MAX_ASSISTS:
+        reply = (
+            "You've already received code assistance a few times. "
+            "Open source contribution is about learning by doing. "
+            "Try to complete the TODOs from the previous snippet or ask me a specific question. "
+            "I won't provide more code to ensure you truly understand the process."
+        )
+        return {
+            **state,
+            "messages": _assistant(messages, reply),
+            "conversation_phase": "guidance",
+            "code_assist_count": code_assist_count,
+        }
+
+    # Generate boilerplate with TODOs
+    reply = llm_respond(
+        f"""
+        Issue: {json.dumps(selected_issue)}
+        Repository: {repo_url}
+        User's previous understanding: {state.get("understanding_score", "unknown")}
+
+        The user is stuck. Provide a **boilerplate code snippet** that outlines the structure needed.
+        - Include **`# TODO:` comments** for every part the user must fill in.
+        - Do NOT give a complete solution.
+        - Add a note that the user must write the actual logic themselves.
+        - Keep the code short and directly relevant to the issue.
+
+        Example format:
+        ```python
+        def fix_problem(param):
+            # TODO: Understand what 'param' does and implement the core logic
+            pass
+        End with a question asking them to try filling the TODOs.
+        """,
+        messages,
+    )
+    new_count = code_assist_count + 1
+    logger.info(f"Code assist provided. Count now {new_count}/{MAX_ASSISTS}")
+
+    return {
+        **state,
+        "messages": _assistant(messages, reply),
+        "code_assist_count": new_count,
+        "conversation_phase": "guidance",
     }

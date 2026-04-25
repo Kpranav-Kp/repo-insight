@@ -1,6 +1,12 @@
 from rest_framework import serializers
 
-from .models import ConversationSession, Recommendation, Repository, UserProfile
+from .models import (
+    ConversationSession,
+    LearnerProfile,
+    Recommendation,
+    Repository,
+    UserProfile,
+)
 
 
 class RepositorySerializer(serializers.ModelSerializer):
@@ -30,7 +36,7 @@ class RepositorySerializer(serializers.ModelSerializer):
 class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserProfile
-        fields = ["skills", "target_repo", "intent"]
+        fields = ["skills", "target_repo"]
 
     def validate_skills(self, value):
         valid_bands = {"beginner", "intermediate", "advanced"}
@@ -90,5 +96,28 @@ class ChatMessageSerializer(serializers.Serializer):
 class ConversationSessionSerializer(serializers.ModelSerializer):
     class Meta:
         model = ConversationSession
-        fields = ["id", "repository", "phase", "created_at", "updated_at"]
-        read_only_fields = ["phase"]
+        fields = [
+            "id",
+            "repository",
+            "phase",
+            "created_at",
+            "updated_at",
+            "code_assist_count",
+            "stuck_counter",
+        ]
+        read_only_fields = ["phase", "code_assist_count", "stuck_counter"]
+
+
+class LearnerProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LearnerProfile
+        fields = [
+            "id",
+            "user",
+            "completed_issues",
+            "code_assist_used",
+            "last_active",
+            "mastered_skills",
+        ]
+
+        read_only_fields = ["user", "last_active"]

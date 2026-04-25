@@ -40,7 +40,9 @@ def load_engine_for_repo(repo_id: int) -> RecommendationEngine:
     repo = Repository.objects.get(id=repo_id)
 
     if repo.status != "completed" or not repo.index_path:
-        raise RuntimeError(f"Repository {repo_id} is not ready. status={repo.status}, index_path={repo.index_path}")
+        raise RuntimeError(
+            f"Repository {repo_id} is not ready. status={repo.status}, index_path={repo.index_path}"
+        )
 
     model_path = getattr(settings, "SENTENCE_TRANSFORMER_MODEL", "all-MiniLM-L6-v2")
     engine = RecommendationEngine()
@@ -56,7 +58,7 @@ def load_engine_for_repo(repo_id: int) -> RecommendationEngine:
     return engine
 
 
-def clear_cache(repo_id: int = None):
+def clear_cache(repo_id: int = 0) -> None:
     """Call this if repo is re-analyzed"""
     global _engine_cache
     if repo_id:

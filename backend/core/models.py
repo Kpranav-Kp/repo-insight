@@ -35,7 +35,6 @@ class UserProfile(models.Model):
     target_repo = models.ForeignKey(
         Repository, null=True, blank=True, on_delete=models.SET_NULL
     )
-    intent = models.TextField(blank=True)
 
     def __str__(self):
         return f"{self.user.username}'s profile"
@@ -55,6 +54,7 @@ class Recommendation(models.Model):
     combined_score = models.FloatField()
     feedback = models.BooleanField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    pr_created_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-combined_score"]
@@ -70,9 +70,22 @@ class ConversationSession(models.Model):
     phase = models.CharField(max_length=50, default="onboarding")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    code_assist_count = models.IntegerField(default=0)
+    stuck_counter = models.IntegerField(default=0)
 
     class Meta:
         unique_together = ["user", "repository"]
 
     def __str__(self):
         return f"Session for {self.user.username} on {self.repository.url} - Phase: {self.phase}"
+
+
+class LearnerProfile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    completed_issues = models.JSONField(default=list)
+    code_assist_used = models.IntegerField(default=0)
+    last_active = models.DateTimeField(auto_now=True)
+    mastered_skills = models.JSONField(default=list)
+
+    def __str__(self):
+        return f"{self.user.username}'s Learner Profile"

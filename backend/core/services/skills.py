@@ -94,11 +94,11 @@ class SkillExtractor:
         self.skills = self.SKILLS_DB.copy()
         if custom_skills:
             self.skills.update(s.lower() for s in custom_skills)
-        self._compile_patterns()  # compile once
+        self._compile_patterns()
 
     def _compile_patterns(self):
         self._patterns = {
-            skill: re.compile(rf"\b{re.escape(skill)}\b", re.IGNORECASE)
+            skill: re.compile(rf"(?:^|\s)({re.escape(skill)})(?=\s|$)", re.IGNORECASE)
             for skill in self.skills
         }
 

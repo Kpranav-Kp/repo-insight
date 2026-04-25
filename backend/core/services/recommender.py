@@ -25,14 +25,18 @@ class RecommendationEngine:
         Raises RuntimeError on GitHub failures.
         """
         try:
-            issues = self.github.fetch_issues(repo_url, limit=50)
+            issues = self.github.fetch_issues(
+                repo_url, limit=settings.GITHUB_ISSUE_LIMIT
+            )
         except RateLimitError as e:
             raise RuntimeError(f"GitHub rate limit hit: {e}") from e
         except GitHubError as e:
             raise RuntimeError(f"Failed to fetch issues: {e}") from e
 
         try:
-            prs = self.github.fetch_pull_requests(repo_url, limit=20)
+            prs = self.github.fetch_pull_requests(
+                repo_url, limit=settings.GITHUB_PR_LIMIT
+            )
         except RateLimitError as e:
             raise RuntimeError(f"GitHub rate limit hit: {e}") from e
         except GitHubError as e:
@@ -62,6 +66,7 @@ class RecommendationEngine:
                         "id": str(pr.number),
                         "title": pr.title,
                         "issue_id": None,
+                        "created_at": pr.created_at,
                     }
                 )
             else:
@@ -71,6 +76,7 @@ class RecommendationEngine:
                             "id": str(pr.number),
                             "title": pr.title,
                             "issue_id": str(linked_issue_id),
+                            "created_at": pr.created_at,
                         }
                     )
 

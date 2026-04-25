@@ -1,4 +1,6 @@
 import logging
+import math
+from datetime import datetime
 
 from .embeddings import EmbeddingService, SearchResult
 
@@ -278,7 +280,8 @@ class SemanticGraph:
         pr_ids = {e["target_id"] for e in pr_edges}
         rec_vec = self.issues._service.encode([recommendation_text])[0]
 
-        max_sim = 0.0
+        max_weighted_sim = 0.0
+        now = datetime.now()
         for pr_meta in self.prs.meta:
             if pr_meta["id"] not in pr_ids:
                 continue
@@ -289,10 +292,30 @@ class SemanticGraph:
 
             pr_vec = self.prs.get_vector(pr_idx)
             sim = float(rec_vec @ pr_vec)
-            if sim > max_sim:
-                max_sim = sim
+            created_at_str = pr_meta.get("created_at")
+            if created_at_str:
+                try:
+                    if isinstance(created_at_str, str):
+                        created_at = datetime.fromisoformat(
+                            created_at_str.replace("Z", "+00:00")
+                        )
+                    else:
+                        created_at = created_at_str
+                    months = (now - created_at).days / 30.44
+                    decay = math.exp(-0.5 * months)
+                except Exception as e:
+                    logger.warning(
+                        "Failed to parse created_at '%s': %s", created_at_str, e
+                    )
+                    decay = 1.0
+            else:
+                decay = 1.0
 
-        return round(1.0 - max_sim, 4)
+            weighted_sim = sim * decay
+            if weighted_sim > max_weighted_sim:
+                max_weighted_sim = weighted_sim
+
+        return round(1.0 - max_weighted_sim, 4)
 
     def stats(self) -> dict:
         return {

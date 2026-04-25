@@ -5,14 +5,15 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import ConversationSession, Recommendation, Repository
+from .models import ConversationSession, LearnerProfile, Recommendation, Repository
 from .serializers import (
     ChatMessageSerializer,
     ConversationSessionSerializer,
+    LearnerProfileSerializer,
     RecommendationSerializer,
     RepositorySerializer,
 )
-from .tasks import analyze_repository_task
+from .tasks import analyze_repository_task, run_chat_task
 
 # Create your views here.
 
@@ -55,9 +56,6 @@ class RepositoryStatusView(APIView):
         return Response(RepositorySerializer(repo).data)
 
 
-from .tasks import run_chat_task
-
-
 class ChatMessageView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -67,8 +65,8 @@ class ChatMessageView(APIView):
         )
         serializer.is_valid(raise_exception=True)
 
-        session_id = serializer.validated_data["session_id"]
-        user_message = serializer.validated_data["message"]
+        session_id = serializer.validated_data["session_id"]  # type: ignore
+        user_message = serializer.validated_data["message"]  # type: ignore
 
         session = get_object_or_404(
             ConversationSession, id=session_id, user=request.user
@@ -77,7 +75,7 @@ class ChatMessageView(APIView):
         current_state = session.state or {}
         current_state.setdefault("messages", [])
         current_state.setdefault("conversation_phase", "onboarding")
-        current_state.setdefault("repo_id", session.repository.id)
+        current_state.setdefault("repo_id", session.repository.pk)
         current_state.setdefault("repo_url", session.repository.url)
         current_state["messages"].append({"role": "user", "content": user_message})
 
@@ -114,7 +112,6 @@ class ChatSessionView(APIView):
                     "repo_id": repo.pk,
                     "repo_url": repo.url,
                     "user_skills": [],
-                    "intent": "",
                     "selected_issue": None,
                     "conversation_phase": "onboarding",
                     "messages": [],
@@ -127,45 +124,6 @@ class ChatSessionView(APIView):
             ConversationSessionSerializer(session).data,
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )
-
-
-"""
-class ChatSessionView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        repo_id = request.data.get("repository_id")
-
-        if not repo_id:
-            return Response(
-                {"error": "repository_id is required."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        repo = get_object_or_404(Repository, id=repo_id, status="completed")
-
-        session, created = ConversationSession.objects.get_or_create(
-            user=request.user,
-            repository=repo,
-            defaults={
-                "state": {
-                    "repo_id": repo.pk,
-                    "repo_url": repo.url,
-                    "user_skills": [],
-                    "intent": "",
-                    "selected_issue": None,
-                    "conversation_phase": "onboarding",
-                    "messages": [],
-                },
-                "phase": "onboarding",
-            },
-        )
-
-        return Response(
-            ConversationSessionSerializer(session).data,
-            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
-        )
-"""
 
 
 class RecommendationFeedbackView(APIView):
@@ -193,17 +151,52 @@ class ChatResultView(APIView):
 
         if result.ready():
             state = result.get()
-            agent_message = ""
-            for m in reversed(state["messages"]):
-                if m["role"] == "assistant":
-                    agent_message = m["content"]
-                    break
-            return Response(
-                {
-                    "status": "done",
-                    "message": agent_message,
-                    "phase": state.get("conversation_phase"),
-                }
-            )
+            if state is not None:
+                agent_message = ""
+                for m in reversed(state["messages"]):
+                    if m["role"] == "assistant":
+                        agent_message = m["content"]
+                        break
+                return Response(
+                    {
+                        "status": "done",
+                        "message": agent_message,
+                        "phase": state.get("conversation_phase"),
+                    }
+                )
 
         return Response({"status": "processing"})
+
+
+class UpdateSessionSkillsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request, session_id):
+        session = get_object_or_404(
+            ConversationSession, id=session_id, user=request.user
+        )
+        skills = request.data.get("skills")
+        if not isinstance(skills, list):
+            return Response(
+                {"error": "skills must be a list"}, status=status.HTTP_400_BAD_REQUEST
+            )
+        current_state = session.state or {}
+        current_state["user_skills"] = skills
+        session.state = current_state
+        session.save(update_fields=["state"])
+        return Response({"status": "skills updated"})
+
+
+class LearnerProfileView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        profile, _ = LearnerProfile.objects.get_or_create(user=request.user)
+        return Response(LearnerProfileSerializer(profile).data)
+
+    def patch(self, request):
+        profile, _ = LearnerProfile.objects.get_or_create(user=request.user)
+        serializer = LearnerProfileSerializer(profile, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
