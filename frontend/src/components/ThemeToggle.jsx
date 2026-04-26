@@ -10,7 +10,6 @@ const getInitialTheme = () => {
     : "light";
 };
 
-
 export const ThemeToggle = () => {
   const [theme, setTheme] = useState(getInitialTheme);
 

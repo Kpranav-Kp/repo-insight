@@ -53,8 +53,6 @@ dark:from-indigo-400 dark:via-violet-400 dark:to-purple-400 bg-clip-text text-tr
           Continue your open-source journey — your skill graph is waiting.
         </p>
 
-      
-
         {/* Divider */}
         <div className="my-6 flex items-center gap-3">
           <div className="h-px flex-1 bg-border" />
