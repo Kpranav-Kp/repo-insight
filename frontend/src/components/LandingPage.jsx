@@ -1,10 +1,6 @@
 import { useRef, useEffect, useState } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 
+import Login from "@/components/Login";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,9 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import Login from "@/components/Login";
-
-
+import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 
 const TerminalTypewriter = ({ text, delay = 65, pause = 2200 }) => {
   const [displayed, setDisplayed] = useState("");
@@ -537,30 +531,30 @@ const LandingPage = () => {
           </nav>
 
           <div className="flex items-center gap-3">
-           {/*} <Button
+            {/*} <Button
               variant="ghost"
               size="sm"
               className="hidden sm:inline-flex text-sm font-medium"
             >
               Log in
             </Button>*/}
-             <Dialog>
-    <DialogTrigger asChild>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="hidden sm:inline-flex text-sm font-medium"
-      >
-        Log in
-      </Button>
-    </DialogTrigger>
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="hidden sm:inline-flex text-sm font-medium"
+                >
+                  Log in
+                </Button>
+              </DialogTrigger>
 
-    <DialogContent className="p-0 sm:max-w-md border-border/70 bg-transparent shadow-none">
-      {/* Your existing Login form renders inside the modal */}
-      <Login />
-    </DialogContent>
-  </Dialog>
-            
+              <DialogContent className="p-0 sm:max-w-md border-border/70 bg-transparent shadow-none">
+                {/* Your existing Login form renders inside the modal */}
+                <Login />
+              </DialogContent>
+            </Dialog>
+
             <Button
               size="sm"
               className="hidden sm:inline-flex text-sm font-semibold shadow-md shadow-primary/15"

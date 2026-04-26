@@ -1,9 +1,10 @@
+import { Mail, Lock, ArrowRight, Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
-import {Mail, Lock, ArrowRight, Eye, EyeOff } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card } from "@/components/ui/card";
+
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 
 export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
@@ -41,8 +42,10 @@ export default function Login() {
 
         <h1 className="font-display text-3xl font-bold leading-tight">
           Log in to{" "}
-          <span className="bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 
-dark:from-indigo-400 dark:via-violet-400 dark:to-purple-400 bg-clip-text text-transparent animate-gradient">
+          <span
+            className="bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 
+dark:from-indigo-400 dark:via-violet-400 dark:to-purple-400 bg-clip-text text-transparent animate-gradient"
+          >
             keep building.
           </span>
         </h1>
@@ -50,25 +53,13 @@ dark:from-indigo-400 dark:via-violet-400 dark:to-purple-400 bg-clip-text text-tr
           Continue your open-source journey — your skill graph is waiting.
         </p>
 
-        {/* Social */}
-      <div className="mt-6">
-  <Button variant="outline" className="w-full bg-secondary/40 hover:bg-secondary">
-    <svg className="mr-2 h-4 w-4" viewBox="0 0 48 48" aria-hidden="true">
-      <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.7-6.1 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.8 1.1 7.9 3l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.2-.1-2.3-.4-3.5z"/>
-      <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 16 19 13 24 13c3 0 5.8 1.1 7.9 3l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/>
-      <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.6 39.6 16.2 44 24 44z"/>
-      <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.1-4.1 5.5l6.2 5.2C41 35.5 44 30.2 44 24c0-1.2-.1-2.3-.4-3.5z"/>
-    </svg>
-    Continue with Google
-  </Button>
-</div>
-
+      
 
         {/* Divider */}
         <div className="my-6 flex items-center gap-3">
           <div className="h-px flex-1 bg-border" />
           <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-            or with email
+            login with email
           </span>
           <div className="h-px flex-1 bg-border" />
         </div>
@@ -76,7 +67,9 @@ dark:from-indigo-400 dark:via-violet-400 dark:to-purple-400 bg-clip-text text-tr
         {/* Form */}
         <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-muted-foreground">Email</label>
+            <label className="text-xs font-medium text-muted-foreground">
+              Email
+            </label>
             <div className="relative">
               <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -89,7 +82,9 @@ dark:from-indigo-400 dark:via-violet-400 dark:to-purple-400 bg-clip-text text-tr
 
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-medium text-muted-foreground">Password</label>
+              <label className="text-xs font-medium text-muted-foreground">
+                Password
+              </label>
               <a href="#" className="text-xs text-primary hover:underline">
                 Forgot?
               </a>
@@ -106,7 +101,11 @@ dark:from-indigo-400 dark:via-violet-400 dark:to-purple-400 bg-clip-text text-tr
                 onClick={() => setShowPassword((s) => !s)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               >
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                {showPassword ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
               </button>
             </div>
           </div>
