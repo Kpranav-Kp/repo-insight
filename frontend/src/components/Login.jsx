@@ -5,17 +5,19 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-{/*
+{
+  /*
 export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
-  */}
+  */
+}
 export default function Login({ onLoginSuccess }) {
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
@@ -40,7 +42,7 @@ export default function Login({ onLoginSuccess }) {
       localStorage.setItem("access_token", data.access);
       if (data.refresh) localStorage.setItem("refresh_token", data.refresh);
       localStorage.setItem("username", email);
-      onLoginSuccess?.();   // tell App.jsx to switch to <ChatPage />
+      onLoginSuccess?.(); // tell App.jsx to switch to <ChatPage />
     } catch (err) {
       setError("Network error — is the backend running?");
       setLoading(false);
@@ -100,7 +102,7 @@ dark:from-indigo-400 dark:via-violet-400 dark:to-purple-400 bg-clip-text text-tr
           <div className="h-px flex-1 bg-border" />
         </div>
 
-        {/* Form */} 
+        {/* Form */}
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-muted-foreground">
@@ -109,15 +111,13 @@ dark:from-indigo-400 dark:via-violet-400 dark:to-purple-400 bg-clip-text text-tr
             <div className="relative">
               <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-              type="text"
-              placeholder="you@repo.dev"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="pl-9 bg-secondary/40 border-border/70 focus-visible:ring-primary/60"
+                type="text"
+                placeholder="you@repo.dev"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                className="pl-9 bg-secondary/40 border-border/70 focus-visible:ring-primary/60"
               />
-
-              
             </div>
           </div>
 
@@ -133,15 +133,14 @@ dark:from-indigo-400 dark:via-violet-400 dark:to-purple-400 bg-clip-text text-tr
             <div className="relative">
               <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-              type={showPassword ? "text" : "password"}
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="pl-9 pr-9 bg-secondary/40 border-border/70 focus-visible:ring-primary/60"
-            />
+                type={showPassword ? "text" : "password"}
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className="pl-9 pr-9 bg-secondary/40 border-border/70 focus-visible:ring-primary/60"
+              />
 
-              
               <button
                 type="button"
                 onClick={() => setShowPassword((s) => !s)}
@@ -156,13 +155,15 @@ dark:from-indigo-400 dark:via-violet-400 dark:to-purple-400 bg-clip-text text-tr
             </div>
           </div>
           {error && <p className="text-sm text-red-400 mb-2">{error}</p>}
-          
-          <Button type="submit" disabled={loading} className="group w-full bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 text-primary-foreground hover:opacity-95 shadow-lg shadow-primary/30 transition">
-          {loading ? "Logging in..." : "Log in"}
-          <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-          </Button>
 
-          
+          <Button
+            type="submit"
+            disabled={loading}
+            className="group w-full bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 text-primary-foreground hover:opacity-95 shadow-lg shadow-primary/30 transition"
+          >
+            {loading ? "Logging in..." : "Log in"}
+            <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+          </Button>
         </form>
 
         <p className="mt-6 text-center text-sm text-muted-foreground">

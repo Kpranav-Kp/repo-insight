@@ -1,5 +1,6 @@
-import { useState } from "react";
 import { Search } from "lucide-react";
+import { useState } from "react";
+
 import { cn } from "@/lib/utils";
 
 // Replace this with data from your backend later.
@@ -51,7 +52,7 @@ export function SessionHistory() {
   const filtered = sessions.filter(
     (s) =>
       s.repo.toLowerCase().includes(query.toLowerCase()) ||
-      s.title.toLowerCase().includes(query.toLowerCase())
+      s.title.toLowerCase().includes(query.toLowerCase()),
   );
 
   const inProgress = filtered.filter((s) => s.status === "in_progress");
@@ -115,7 +116,7 @@ function SessionCard({ session }) {
         "group relative overflow-hidden rounded-xl border bg-card/60 p-4 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-violet-600/10",
         inProgress
           ? "border-violet-500/40 ring-1 ring-violet-500/30"
-          : "border-border/60"
+          : "border-border/60",
       )}
     >
       {inProgress && (
@@ -143,7 +144,7 @@ function SessionCard({ session }) {
               "text-xs font-medium",
               session.status === "completed"
                 ? "text-emerald-400"
-                : "text-foreground"
+                : "text-foreground",
             )}
           >
             {session.stage}
@@ -154,7 +155,7 @@ function SessionCard({ session }) {
             "rounded-md px-3 py-1.5 text-xs font-semibold transition-all",
             inProgress
               ? "bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 text-white shadow-md shadow-violet-600/30 hover:shadow-violet-600/50 dark:from-indigo-400 dark:via-violet-400 dark:to-purple-400"
-              : "border border-border text-muted-foreground hover:bg-violet-600/15 hover:text-foreground"
+              : "border border-border text-muted-foreground hover:bg-violet-600/15 hover:text-foreground",
           )}
         >
           {inProgress ? "Resume →" : "Review"}
@@ -174,7 +175,7 @@ function StepDots({ total, done }) {
             "h-2 w-2 rounded-full transition-colors",
             i < done
               ? "bg-gradient-to-br from-indigo-500 via-violet-500 to-purple-500"
-              : "bg-muted"
+              : "bg-muted",
           )}
         />
       ))}

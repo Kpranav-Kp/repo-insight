@@ -1,4 +1,11 @@
-import { Compass, MessageSquare, History, Bookmark, LogOut } from "lucide-react";
+import {
+  Compass,
+  MessageSquare,
+  History,
+  Bookmark,
+  LogOut,
+} from "lucide-react";
+
 import { cn } from "@/lib/utils";
 
 const items = [
@@ -23,7 +30,7 @@ export function ChatSidebar({ active, onChange }) {
                 "group relative flex h-10 w-10 items-center justify-center rounded-xl transition-all",
                 isActive
                   ? "bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-600 text-white shadow-lg shadow-violet-600/30 dark:from-indigo-400 dark:via-violet-400 dark:to-purple-400"
-                  : "text-muted-foreground hover:bg-violet-600/15 hover:text-foreground"
+                  : "text-muted-foreground hover:bg-violet-600/15 hover:text-foreground",
               )}
             >
               <Icon className="h-5 w-5" />

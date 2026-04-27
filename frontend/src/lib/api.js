@@ -3,7 +3,7 @@
 // Auth: JWT access token stored in localStorage under "access_token".
 
 const BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";;
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
 
 export function getToken() {
   if (typeof window === "undefined") return null;
@@ -24,8 +24,7 @@ async function request(path, options = {}) {
 
   if (!res.ok) {
     const msg =
-      (data && (data.error || data.detail)) ||
-      `Request failed (${res.status})`;
+      (data && (data.error || data.detail)) || `Request failed (${res.status})`;
     throw new Error(msg);
   }
   return data;
@@ -38,8 +37,7 @@ export const api = {
       body: JSON.stringify({ url }),
     }),
 
-  repositoryStatus: (repoId) =>
-    request(`/repositories/${repoId}/status/`),
+  repositoryStatus: (repoId) => request(`/repositories/${repoId}/status/`),
 
   createSession: (repositoryId) =>
     request("/chat/session/", {
@@ -53,12 +51,15 @@ export const api = {
       body: JSON.stringify({ session_id: sessionId, message }),
     }),
 
-  chatResult: (taskId) =>
-    request(`/chat/result/${taskId}/`),
+  chatResult: (taskId) => request(`/chat/result/${taskId}/`),
 };
 
 // Poll helper
-export async function poll(fn, done, { intervalMs = 1500, timeoutMs = 120000 } = {}) {
+export async function poll(
+  fn,
+  done,
+  { intervalMs = 1500, timeoutMs = 120000 } = {},
+) {
   const start = Date.now();
   while (true) {
     const v = await fn();

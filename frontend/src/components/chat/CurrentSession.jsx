@@ -1,35 +1,48 @@
-import { useEffect, useRef, useState } from "react";
 import { Send, Loader2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { useEffect, useRef, useState } from "react";
+
 import { api, poll } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 export function CurrentSession() {
   // stage: "idle" | "analyzing" | "ready" | "thinking"
-// Add this at the top of the component
-const user = localStorage.getItem("username") || "default";
+  // Add this at the top of the component
+  const user = localStorage.getItem("username") || "default";
 
-// Then change all localStorage keys like this:
-const [stage, setStage] = useState(() => localStorage.getItem(`${user}_stage`) || "idle");
-const [repoLabel, setRepoLabel] = useState(() => localStorage.getItem(`${user}_repoLabel`) || "");
-const [sessionId, setSessionId] = useState(() => localStorage.getItem(`${user}_sessionId`) || null);
-const [phase, setPhase] = useState(() => localStorage.getItem(`${user}_phase`) || "onboarding");
-const [messages, setMessages] = useState(() => {
-  const saved = localStorage.getItem(`${user}_messages`);
-  return saved ? JSON.parse(saved) : [
-    {
-      role: "ai",
-      content: "Hey! I'm here to help you find a meaningful open source issue to work on — and guide you through it without handing you the solution.\n\nWhat's the GitHub repo URL you'd like to contribute to?",
-    },
-  ];
-});
-useEffect(() => {
-  localStorage.setItem(`${user}_stage`, stage);
-  localStorage.setItem(`${user}_repoLabel`, repoLabel);
-  localStorage.setItem(`${user}_sessionId`, sessionId);
-  localStorage.setItem(`${user}_phase`, phase);
-  localStorage.setItem(`${user}_messages`, JSON.stringify(messages));
-}, [stage, repoLabel, sessionId, phase, messages]);
-{/*}  const [stage, setStage] = useState("idle");
+  // Then change all localStorage keys like this:
+  const [stage, setStage] = useState(
+    () => localStorage.getItem(`${user}_stage`) || "idle",
+  );
+  const [repoLabel, setRepoLabel] = useState(
+    () => localStorage.getItem(`${user}_repoLabel`) || "",
+  );
+  const [sessionId, setSessionId] = useState(
+    () => localStorage.getItem(`${user}_sessionId`) || null,
+  );
+  const [phase, setPhase] = useState(
+    () => localStorage.getItem(`${user}_phase`) || "onboarding",
+  );
+  const [messages, setMessages] = useState(() => {
+    const saved = localStorage.getItem(`${user}_messages`);
+    return saved
+      ? JSON.parse(saved)
+      : [
+          {
+            role: "ai",
+            content:
+              "Hey! I'm here to help you find a meaningful open source issue to work on — and guide you through it without handing you the solution.\n\nWhat's the GitHub repo URL you'd like to contribute to?",
+          },
+        ];
+  });
+  useEffect(() => {
+    localStorage.setItem(`${user}_stage`, stage);
+    localStorage.setItem(`${user}_repoLabel`, repoLabel);
+    localStorage.setItem(`${user}_sessionId`, sessionId);
+    localStorage.setItem(`${user}_phase`, phase);
+    localStorage.setItem(`${user}_messages`, JSON.stringify(messages));
+  }, [stage, repoLabel, sessionId, phase, messages]);
+  {
+    /*}  const [stage, setStage] = useState("idle");
   const [repoLabel, setRepoLabel] = useState("");
   const [sessionId, setSessionId] = useState(null);
   const [phase, setPhase] = useState("onboarding");
@@ -39,7 +52,8 @@ useEffect(() => {
       content:
         "Hey! I'm here to help you find a meaningful open source issue to work on — and guide you through it without handing you the solution.\n\nWhat's the GitHub repo URL you'd like to contribute to?",
     },
-  ]);*/}
+  ]);*/
+  }
   const [input, setInput] = useState("");
   const [error, setError] = useState(null);
   const scrollRef = useRef(null);
@@ -76,7 +90,7 @@ useEffect(() => {
       const repo = await poll(
         () => api.repositoryStatus(repoId),
         (r) => r.status === "completed" || r.status === "failed",
-        { intervalMs: 2000, timeoutMs: 5 * 60000 }
+        { intervalMs: 2000, timeoutMs: 5 * 60000 },
       );
       if (repo.status === "failed") {
         throw new Error(repo.error_message || "Repository analysis failed.");
@@ -124,7 +138,7 @@ useEffect(() => {
       const result = await poll(
         () => api.chatResult(accepted.task_id),
         (r) => r.status === "done",
-        { intervalMs: 1500, timeoutMs: 2 * 60000 }
+        { intervalMs: 1500, timeoutMs: 2 * 60000 },
       );
 
       if (result.status === "done") {
@@ -163,8 +177,8 @@ useEffect(() => {
     stage === "idle"
       ? "Paste a GitHub repo URL..."
       : busy
-      ? "Working..."
-      : "Type a message...";
+        ? "Working..."
+        : "Type a message...";
 
   return (
     <div className="flex h-full flex-col">
@@ -185,13 +199,13 @@ useEffect(() => {
             <span
               className={cn(
                 "absolute inline-flex h-full w-full rounded-full opacity-75",
-                busy ? "animate-ping bg-amber-400" : "bg-emerald-400"
+                busy ? "animate-ping bg-amber-400" : "bg-emerald-400",
               )}
             />
             <span
               className={cn(
                 "relative inline-flex h-2 w-2 rounded-full",
-                busy ? "bg-amber-500" : "bg-emerald-500"
+                busy ? "bg-amber-500" : "bg-emerald-500",
               )}
             />
           </span>
@@ -200,7 +214,10 @@ useEffect(() => {
       </div>
 
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 space-y-5 overflow-y-auto px-6 py-6">
+      <div
+        ref={scrollRef}
+        className="flex-1 space-y-5 overflow-y-auto px-6 py-6"
+      >
         {messages.map((msg, i) => (
           <MessageBubble key={i} msg={msg} />
         ))}
@@ -254,7 +271,7 @@ function MessageBubble({ msg }) {
           "max-w-[78%] whitespace-pre-line rounded-2xl px-4 py-3 text-sm leading-relaxed",
           isUser
             ? "rounded-tr-sm bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-600 text-white shadow-md shadow-violet-600/20 dark:from-indigo-400 dark:via-violet-400 dark:to-purple-400"
-            : "rounded-tl-sm bg-card/70 text-foreground ring-1 ring-border/60 backdrop-blur-sm"
+            : "rounded-tl-sm bg-card/70 text-foreground ring-1 ring-border/60 backdrop-blur-sm",
         )}
       >
         {msg.content}
