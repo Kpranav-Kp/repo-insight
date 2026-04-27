@@ -443,7 +443,7 @@ const Features = [
   },
 ];
 
-const LandingPage = () => {
+const LandingPage = ({ onLoginSuccess }) => {
   const scrollContainerRef = useRef(null);
 
   useEffect(() => {
@@ -551,7 +551,7 @@ const LandingPage = () => {
 
               <DialogContent className="p-0 sm:max-w-md border-border/70 bg-transparent shadow-none">
                 {/* Your existing Login form renders inside the modal */}
-                <Login />
+                <Login onLoginSuccess={onLoginSuccess} />
               </DialogContent>
             </Dialog>
 
