@@ -1,62 +1,36 @@
-import { Search } from "lucide-react";
-import { useState } from "react";
-
+// src/components/chat/SessionHistory.jsx
+import { useEffect, useState } from "react";
+import { Search, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { loadSessions, deleteSession } from "@/lib/sessionStore";
 
-// Replace this with data from your backend later.
-const sessions = [
-  {
-    repo: "django/django",
-    issueNumber: 15821,
-    title: "bulk_create() ignores update_fields on conflict",
-    status: "in_progress",
-    stage: "Understand it",
-    steps: 4,
-    doneSteps: 2,
-    updatedLabel: "2 hours ago",
-  },
-  {
-    repo: "fastapi/fastapi",
-    issueNumber: 2201,
-    title: "Background tasks don't inherit request context",
-    status: "in_progress",
-    stage: "Plan your PR",
-    steps: 4,
-    doneSteps: 1,
-    updatedLabel: "Yesterday",
-  },
-  {
-    repo: "celery/celery",
-    issueNumber: 8812,
-    title: "ETA tasks ignore timezone offset in Windows",
-    status: "completed",
-    stage: "Completed",
-    steps: 4,
-    doneSteps: 4,
-    updatedLabel: "3 days ago",
-  },
-  {
-    repo: "langchain-ai/langchain",
-    issueNumber: 12044,
-    title: "Streaming output drops final chunk on retry",
-    status: "completed",
-    stage: "Completed",
-    steps: 4,
-    doneSteps: 4,
-    updatedLabel: "Apr 20",
-  },
-];
-
-export function SessionHistory() {
+export function SessionHistory({ onResume, activeLocalId }) {
   const [query, setQuery] = useState("");
-  const filtered = sessions.filter(
-    (s) =>
-      s.repo.toLowerCase().includes(query.toLowerCase()) ||
-      s.title.toLowerCase().includes(query.toLowerCase()),
-  );
+  const [sessions, setSessions] = useState([]);
 
-  const inProgress = filtered.filter((s) => s.status === "in_progress");
-  const completed = filtered.filter((s) => s.status === "completed");
+  useEffect(() => {
+    const refresh = () => setSessions(loadSessions());
+    refresh();
+    window.addEventListener("sessions-updated", refresh);
+    window.addEventListener("storage", refresh);
+    return () => {
+      window.removeEventListener("sessions-updated", refresh);
+      window.removeEventListener("storage", refresh);
+    };
+  }, []);
+
+  const filtered = sessions.filter((s) => {
+    const q = query.toLowerCase();
+    return (
+      (s.repoLabel || "").toLowerCase().includes(q) ||
+      (s.messages?.[1]?.content || "").toLowerCase().includes(q)
+    );
+  });
+
+  const handleDelete = (e, id) => {
+    e.stopPropagation();
+    deleteSession(id);
+  };
 
   return (
     <div className="flex h-full flex-col">
@@ -66,119 +40,55 @@ export function SessionHistory() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search repos or issues..."
-            className="w-full rounded-xl border border-border bg-card/60 py-2.5 pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground backdrop-blur-sm transition-all focus:border-violet-500/60 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+            placeholder="Search your sessions..."
+            className="w-full rounded-xl border border-border bg-card/60 py-2.5 pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground backdrop-blur-sm focus:border-violet-500/60 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
           />
         </div>
       </div>
 
-      <div className="flex-1 space-y-6 overflow-y-auto px-6 pb-6">
-        {inProgress.length > 0 && (
-          <Section title="In progress">
-            {inProgress.map((s, i) => (
-              <SessionCard key={i} session={s} />
-            ))}
-          </Section>
-        )}
-        {completed.length > 0 && (
-          <Section title="Completed">
-            {completed.map((s, i) => (
-              <SessionCard key={i} session={s} />
-            ))}
-          </Section>
-        )}
+      <div className="flex-1 space-y-3 overflow-y-auto px-6 pb-6">
         {filtered.length === 0 && (
           <p className="py-12 text-center text-sm text-muted-foreground">
-            No sessions match your search.
+            No saved sessions yet. Start a new chat to begin.
           </p>
         )}
-      </div>
-    </div>
-  );
-}
-
-function Section({ title, children }) {
-  return (
-    <section>
-      <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-        {title}
-      </h3>
-      <div className="space-y-3">{children}</div>
-    </section>
-  );
-}
-
-function SessionCard({ session }) {
-  const inProgress = session.status === "in_progress";
-  return (
-    <article
-      className={cn(
-        "group relative overflow-hidden rounded-xl border bg-card/60 p-4 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-violet-600/10",
-        inProgress
-          ? "border-violet-500/40 ring-1 ring-violet-500/30"
-          : "border-border/60",
-      )}
-    >
-      {inProgress && (
-        <span className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-400 to-transparent" />
-      )}
-      <header className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-foreground">
-            {session.repo}
-          </p>
-          <p className="mt-0.5 truncate text-sm text-muted-foreground">
-            #{session.issueNumber} — {session.title}
-          </p>
-        </div>
-        <span className="shrink-0 text-xs text-muted-foreground">
-          {session.updatedLabel}
-        </span>
-      </header>
-
-      <footer className="mt-4 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <StepDots total={session.steps} done={session.doneSteps} />
-          <span
+        {filtered.map((s) => (
+          <article
+            key={s.localId}
+            onClick={() => onResume?.(s)}
             className={cn(
-              "text-xs font-medium",
-              session.status === "completed"
-                ? "text-emerald-400"
-                : "text-foreground",
+              "group relative cursor-pointer overflow-hidden rounded-xl border bg-card/60 p-4 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-violet-600/10",
+              activeLocalId === s.localId
+                ? "border-violet-500/60 ring-1 ring-violet-500/40"
+                : "border-border/60"
             )}
           >
-            {session.stage}
-          </span>
-        </div>
-        <button
-          className={cn(
-            "rounded-md px-3 py-1.5 text-xs font-semibold transition-all",
-            inProgress
-              ? "bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 text-white shadow-md shadow-violet-600/30 hover:shadow-violet-600/50 dark:from-indigo-400 dark:via-violet-400 dark:to-purple-400"
-              : "border border-border text-muted-foreground hover:bg-violet-600/15 hover:text-foreground",
-          )}
-        >
-          {inProgress ? "Resume →" : "Review"}
-        </button>
-      </footer>
-    </article>
-  );
-}
-
-function StepDots({ total, done }) {
-  return (
-    <div className="flex items-center gap-1">
-      {Array.from({ length: total }).map((_, i) => (
-        <span
-          key={i}
-          className={cn(
-            "h-2 w-2 rounded-full transition-colors",
-            i < done
-              ? "bg-gradient-to-br from-indigo-500 via-violet-500 to-purple-500"
-              : "bg-muted",
-          )}
-        />
-      ))}
+            <header className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-foreground">
+                  {s.repoLabel || "New chat"}
+                </p>
+                <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                  {s.messages?.length || 0} messages · {s.phase || "—"}
+                </p>
+              </div>
+              <button
+                onClick={(e) => handleDelete(e, s.localId)}
+                className="rounded-md p-1 text-muted-foreground opacity-0 transition hover:bg-red-500/15 hover:text-red-400 group-hover:opacity-100"
+                aria-label="Delete session"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </header>
+            <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">
+              {s.messages?.[s.messages.length - 1]?.content || "—"}
+            </p>
+            <footer className="mt-3 text-[10px] uppercase tracking-wider text-muted-foreground">
+              {new Date(s.updatedAt).toLocaleString()}
+            </footer>
+          </article>
+        ))}
+      </div>
     </div>
   );
 }

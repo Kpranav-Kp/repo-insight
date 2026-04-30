@@ -42,6 +42,7 @@ export default function Login({ onLoginSuccess }) {
       localStorage.setItem("access_token", data.access);
       if (data.refresh) localStorage.setItem("refresh_token", data.refresh);
       localStorage.setItem("username", email);
+      
       onLoginSuccess?.(); // tell App.jsx to switch to <ChatPage />
     } catch (err) {
       setError("Network error — is the backend running?");

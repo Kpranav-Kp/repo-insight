@@ -1,14 +1,39 @@
-import { MoreHorizontal } from "lucide-react";
-import { useEffect, useState } from "react";
+import { MoreHorizontal, Plus } from "lucide-react";
+import { useState } from "react";
 
 import { ChatSidebar } from "@/components/chat/ChatSidebar";
 import { CurrentSession } from "@/components/chat/CurrentSession";
 import { SessionHistory } from "@/components/chat/SessionHistory";
 import { cn } from "@/lib/utils";
 
-export default function ChatPage() {
+export default function ChatPage({onLogout}) {
   const [tab, setTab] = useState("current"); // "current" | "history"
   const [sidebar, setSidebar] = useState("chat"); // "explore" | "chat" | "history" | "saved"
+  const [activeSession, setActiveSession] = useState(null);
+  const [chatKey, setChatKey] = useState(0);
+  const user = (() => {
+    try { return JSON.parse(localStorage.getItem("user") || "null"); }
+    catch { return null; }
+  })();
+
+  const handleLogout = () => {
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("user");
+    onLogout?.();   // tell App.jsx to switch back to login
+  };
+  const handleNewChat = () => {
+    setActiveSession(null);
+    setChatKey((k) => k + 1);
+    setTab("current");
+    setSidebar("chat");
+  };
+
+  const handleResume = (session) => {
+    setActiveSession(session);
+    setChatKey((k) => k + 1);
+    setTab("current");
+    setSidebar("chat");
+  };
 
   const handleSidebar = (key) => {
     setSidebar(key);
@@ -46,16 +71,33 @@ export default function ChatPage() {
                   Session history
                 </TabButton>
               </div>
-              <button
-                aria-label="More"
-                className="mb-2 flex h-9 w-9 items-center justify-center rounded-lg border border-border/60 bg-card/60 text-muted-foreground transition-colors hover:bg-violet-600/15 hover:text-foreground"
-              >
-                <MoreHorizontal className="h-4 w-4" />
-              </button>
+              <div className="mb-2 flex items-center gap-2">
+                <button
+                  onClick={handleNewChat}
+                  aria-label="New Chat"
+                  className="flex items-center gap-1.5 rounded-lg border border-border/60 bg-card/60 px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-violet-600/15 hover:text-foreground"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  New Chat
+                </button>
+                <button
+                  aria-label="More"
+                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-border/60 bg-card/60 text-muted-foreground transition-colors hover:bg-violet-600/15 hover:text-foreground"
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                </button>
+              </div>
             </div>
 
             <div className="min-h-0 flex-1">
-              {tab === "current" ? <CurrentSession /> : <SessionHistory />}
+              {tab === "current" ? (
+                <CurrentSession key={chatKey} activeSession={activeSession} />
+              ) : (
+                <SessionHistory
+                  onResume={handleResume}
+                  activeLocalId={activeSession?.localId}
+                />
+              )}
             </div>
           </main>
         </div>
