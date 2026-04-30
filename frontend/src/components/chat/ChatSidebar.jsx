@@ -1,5 +1,6 @@
 import { MessageSquare, History, LogOut, User } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+
 import { cn } from "@/lib/utils";
 
 const items = [
@@ -44,7 +45,7 @@ export function ChatSidebar({ active, onChange, onLogout, user }) {
                 "group relative flex h-10 w-10 items-center justify-center rounded-xl transition-all",
                 isActive
                   ? "bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-600 text-white shadow-lg shadow-violet-600/30"
-                  : "text-muted-foreground hover:bg-violet-600/15 hover:text-foreground"
+                  : "text-muted-foreground hover:bg-violet-600/15 hover:text-foreground",
               )}
             >
               <Icon className="h-5 w-5" />

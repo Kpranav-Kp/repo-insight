@@ -538,17 +538,15 @@ const LandingPage = ({ onLoginSuccess }) => {
             >
               Log in
             </Button>*/}
-            
-<Dialog>
-  <DialogTrigger
-    className="hidden sm:inline-flex items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-  >
-    Log in
-  </DialogTrigger>
-  <DialogContent className="p-0 sm:max-w-md border-border/70 bg-transparent shadow-none">
-    <Login onLoginSuccess={onLoginSuccess} />
-  </DialogContent>
-</Dialog>
+
+            <Dialog>
+              <DialogTrigger className="hidden sm:inline-flex items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+                Log in
+              </DialogTrigger>
+              <DialogContent className="p-0 sm:max-w-md border-border/70 bg-transparent shadow-none">
+                <Login onLoginSuccess={onLoginSuccess} />
+              </DialogContent>
+            </Dialog>
 
             <Button
               size="sm"

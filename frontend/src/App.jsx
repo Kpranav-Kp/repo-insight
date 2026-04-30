@@ -10,7 +10,6 @@ export default function App() {
   // read user from localStorage (saved at login)
   const raw = localStorage.getItem("user");
   const user = raw ? JSON.parse(raw) : null;
-  
 
   const handleLogout = () => {
     localStorage.removeItem("access_token");

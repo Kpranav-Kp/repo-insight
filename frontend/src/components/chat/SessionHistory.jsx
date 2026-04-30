@@ -1,8 +1,9 @@
 // src/components/chat/SessionHistory.jsx
-import { useEffect, useState } from "react";
 import { Search, Trash2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { useEffect, useState } from "react";
+
 import { loadSessions, deleteSession } from "@/lib/sessionStore";
+import { cn } from "@/lib/utils";
 
 export function SessionHistory({ onResume, activeLocalId }) {
   const [query, setQuery] = useState("");
@@ -60,7 +61,7 @@ export function SessionHistory({ onResume, activeLocalId }) {
               "group relative cursor-pointer overflow-hidden rounded-xl border bg-card/60 p-4 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-violet-600/10",
               activeLocalId === s.localId
                 ? "border-violet-500/60 ring-1 ring-violet-500/40"
-                : "border-border/60"
+                : "border-border/60",
             )}
           >
             <header className="flex items-start justify-between gap-3">

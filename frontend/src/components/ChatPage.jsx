@@ -6,20 +6,23 @@ import { CurrentSession } from "@/components/chat/CurrentSession";
 import { SessionHistory } from "@/components/chat/SessionHistory";
 import { cn } from "@/lib/utils";
 
-export default function ChatPage({onLogout}) {
+export default function ChatPage({ onLogout }) {
   const [tab, setTab] = useState("current"); // "current" | "history"
   const [sidebar, setSidebar] = useState("chat"); // "explore" | "chat" | "history" | "saved"
   const [activeSession, setActiveSession] = useState(null);
   const [chatKey, setChatKey] = useState(0);
   const user = (() => {
-    try { return JSON.parse(localStorage.getItem("user") || "null"); }
-    catch { return null; }
+    try {
+      return JSON.parse(localStorage.getItem("user") || "null");
+    } catch {
+      return null;
+    }
   })();
 
   const handleLogout = () => {
     localStorage.removeItem("access_token");
     localStorage.removeItem("user");
-    onLogout?.();   // tell App.jsx to switch back to login
+    onLogout?.(); // tell App.jsx to switch back to login
   };
   const handleNewChat = () => {
     setActiveSession(null);
