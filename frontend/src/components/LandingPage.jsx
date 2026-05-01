@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState } from "react";
 
 import Login from "@/components/Login";
+import Signup from "@/components/Signup";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,7 +13,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
-
 const TerminalTypewriter = ({ text, delay = 65, pause = 2200 }) => {
   const [displayed, setDisplayed] = useState("");
   const [phase, setPhase] = useState("typing");
@@ -443,8 +443,10 @@ const Features = [
   },
 ];
 
-const LandingPage = ({ onLoginSuccess }) => {
+const LandingPage = ({ onLoginSuccess,goToSignup}) => {
   const scrollContainerRef = useRef(null);
+  const [loginOpen, setLoginOpen] = useState(false);
+  const [signupOpen, setSignupOpen] = useState(false);
 
   useEffect(() => {
     const el = scrollContainerRef.current;
@@ -539,21 +541,48 @@ const LandingPage = ({ onLoginSuccess }) => {
               Log in
             </Button>*/}
 
-            <Dialog>
-              <DialogTrigger className="hidden sm:inline-flex items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+            <Dialog open={loginOpen} onOpenChange={setLoginOpen}>
+              <DialogTrigger
+                onClick={() => setLoginOpen(true)}
+                className="hidden sm:inline-flex items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+              >
                 Log in
               </DialogTrigger>
+
               <DialogContent className="p-0 sm:max-w-md border-border/70 bg-transparent shadow-none">
-                <Login onLoginSuccess={onLoginSuccess} />
+                <Login
+                  onLoginSuccess={() => {
+                    setLoginOpen(false);      // close popup
+                    onLoginSuccess();         // go to chat
+                  }}
+                />
               </DialogContent>
             </Dialog>
 
-            <Button
-              size="sm"
-              className="hidden sm:inline-flex text-sm font-semibold shadow-md shadow-primary/15"
-            >
-              Sign up
-            </Button>
+            <Dialog open={signupOpen} onOpenChange={setSignupOpen}>
+              <DialogTrigger asChild>
+                <Button
+                  size="sm"
+                  className="hidden sm:inline-flex text-sm font-semibold shadow-md shadow-primary/15"
+                  onClick={() => setSignupOpen(true)}
+                >
+                  Sign up
+                </Button>
+              </DialogTrigger>
+
+              <DialogContent className="p-0 sm:max-w-md border-border/70 bg-transparent shadow-none">
+                <Signup
+                  onSignupSuccess={() => {
+                    setSignupOpen(false);
+                    setLoginOpen(true);
+                  }}
+                  goToLogin={() => {
+                    setSignupOpen(false);
+                    setLoginOpen(true);
+                  }}
+                />
+              </DialogContent>
+            </Dialog>
             <ThemeToggle />
           </div>
         </div>

@@ -9,6 +9,9 @@ from .views import (
     RepositoryAnalyzeView,
     RepositoryStatusView,
     UpdateSessionSkillsView,
+    LoginView,
+    SignupView,
+
 )
 
 urlpatterns = [
@@ -40,4 +43,6 @@ urlpatterns = [
         RecommendationFeedbackView.as_view(),
         name="recommendation-feedback",
     ),
+    path("auth/signup/", SignupView.as_view()),
+    path("auth/login/", LoginView.as_view()),
 ]

@@ -11,7 +11,7 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   */
 }
-export default function Login({ onLoginSuccess }) {
+export default function Login({ onLoginSuccess , goToSignup }) {
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -24,10 +24,10 @@ export default function Login({ onLoginSuccess }) {
     setLoading(true);
 
     try {
-      const res = await fetch("http://localhost:8000/api/auth/token/", {
+      const res = await fetch("http://localhost:8000/api/auth/login/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: email, password }),
+        body: JSON.stringify({ email, password }),
       });
 
       if (!res.ok) {
@@ -41,8 +41,9 @@ export default function Login({ onLoginSuccess }) {
       // 👇 THE TWO LINES YOU ASKED ABOUT GO HERE
       localStorage.setItem("access_token", data.access);
       if (data.refresh) localStorage.setItem("refresh_token", data.refresh);
-      localStorage.setItem("username", email);
-
+      localStorage.setItem("username", data.username);
+      localStorage.setItem("email", email);
+      setLoading(false);
       onLoginSuccess?.(); // tell App.jsx to switch to <ChatPage />
     } catch (err) {
       setError("Network error — is the backend running?");
@@ -167,12 +168,7 @@ dark:from-indigo-400 dark:via-violet-400 dark:to-purple-400 bg-clip-text text-tr
           </Button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-muted-foreground">
-          New here?{" "}
-          <a href="#" className="font-medium text-primary hover:underline">
-            Create an account
-          </a>
-        </p>
+        
 
         {/* Terminal-like footer chip (matches dark screenshot) */}
         <div className="mt-6 rounded-md border border-border/70 bg-secondary/40 px-3 py-2 font-mono text-[11px] text-muted-foreground">

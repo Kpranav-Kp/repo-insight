@@ -11,17 +11,15 @@ export default function ChatPage({ onLogout }) {
   const [sidebar, setSidebar] = useState("chat"); // "explore" | "chat" | "history" | "saved"
   const [activeSession, setActiveSession] = useState(null);
   const [chatKey, setChatKey] = useState(0);
-  const user = (() => {
-    try {
-      return JSON.parse(localStorage.getItem("user") || "null");
-    } catch {
-      return null;
-    }
-  })();
-
+  const user = { 
+  email: localStorage.getItem("email"),
+  name: localStorage.getItem("username")
+  };
+  console.log("user:", user); // add this
   const handleLogout = () => {
     localStorage.removeItem("access_token");
     localStorage.removeItem("user");
+    localStorage.removeItem("email");
     onLogout?.(); // tell App.jsx to switch back to login
   };
   const handleNewChat = () => {
@@ -56,7 +54,7 @@ export default function ChatPage({ onLogout }) {
 
       <div className="relative mx-auto flex h-screen max-w-6xl gap-0 p-4">
         <div className="flex w-full overflow-hidden rounded-2xl border border-border/60 bg-card/40 shadow-2xl shadow-violet-950/30 backdrop-blur-xl">
-          <ChatSidebar active={sidebar} onChange={handleSidebar} />
+          <ChatSidebar active={sidebar} onChange={handleSidebar} onLogout={handleLogout} user={user} />
 
           <main className="flex min-w-0 flex-1 flex-col">
             <div className="flex items-center justify-between border-b border-border/50 px-6 pt-4">

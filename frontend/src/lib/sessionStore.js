@@ -1,11 +1,14 @@
 // src/lib/sessionStore.js
 // Saves chat sessions to localStorage so the user can resume them later.
 
-const KEY = "repoinsight_sessions";
+const getKey = () => {
+  const user = localStorage.getItem("username") || "guest";
+  return `repoinsight_sessions_${user}`;
+};
 
 export function loadSessions() {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = localStorage.getItem(getKey());
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
@@ -13,8 +16,7 @@ export function loadSessions() {
 }
 
 export function saveSessions(sessions) {
-  localStorage.setItem(KEY, JSON.stringify(sessions));
-  // notify other components in the same tab
+  localStorage.setItem(getKey(), JSON.stringify(sessions));
   window.dispatchEvent(new Event("sessions-updated"));
 }
 

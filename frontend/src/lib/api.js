@@ -20,8 +20,12 @@ async function request(path, options = {}) {
 
   const res = await fetch(`${BASE_URL}${path}`, { ...options, headers });
   const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
-
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    throw new Error(`Server returned non-JSON response (${res.status}): ${text.slice(0, 120)}`);
+  }
   if (!res.ok) {
     const msg =
       (data && (data.error || data.detail)) || `Request failed (${res.status})`;
