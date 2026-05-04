@@ -5,9 +5,11 @@ from .views import (
     ChatResultView,
     ChatSessionView,
     LearnerProfileView,
+    LoginView,
     RecommendationFeedbackView,
     RepositoryAnalyzeView,
     RepositoryStatusView,
+    SignupView,
     UpdateSessionSkillsView,
 )
 
@@ -40,4 +42,6 @@ urlpatterns = [
         RecommendationFeedbackView.as_view(),
         name="recommendation-feedback",
     ),
+    path("auth/signup/", SignupView.as_view()),
+    path("auth/login/", LoginView.as_view()),
 ]

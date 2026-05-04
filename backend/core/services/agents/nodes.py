@@ -92,8 +92,8 @@ def onboarding_node(state: AgentState) -> AgentState:
                 f"""
                 The repository uses these skills most: {repo_skills}
                 Ask the user naturally about their experience with these specific skills.
-                Do NOT ask them to rate themselves on a numeric scale.
-                Example: 'I see this repo uses Python and REST APIs a lot — how comfortable are you with those?'
+                Do NOT ask them to rate on a numeric scale.
+                Example: 'I see this repo uses Python and REST APIs — how comfortable are you with those?'
                 ONE question only.
                 """,
                 messages,
@@ -107,12 +107,10 @@ def onboarding_node(state: AgentState) -> AgentState:
         parsed_raw = llm_respond(
             """
             Based on this conversation, extract the user's skills and experience level.
-            Return ONLY valid JSON — a list of objects like:
-            [{"skill": "python", "band": "intermediate"}, {"skill": "sql", "band": "beginner"}]
-
+            Return ONLY valid JSON — a list like:
+            [{"skill": "python", "band": "intermediate"}]
             Valid bands: beginner, intermediate, comfortable.
-            Return an empty list [] if you cannot determine any skills.
-            No markdown fences, no explanation — pure JSON only.
+            Return [] if unclear. Pure JSON only, no markdown.
             """,
             messages,
         )
@@ -125,7 +123,14 @@ def onboarding_node(state: AgentState) -> AgentState:
             skills = []
 
         if skills:
-            state = {**state, "user_skills": skills}
+            # Skills collected — move to analysis, intent always = learn
+            reply = "Great! Let me find the best issues for you — one moment. 🔍"
+            return {
+                **state,
+                "user_skills": skills,
+                "messages": _assistant(messages, reply),
+                "conversation_phase": "analysis",
+            }
         else:
             reply = llm_respond(
                 """
@@ -154,11 +159,6 @@ def onboarding_node(state: AgentState) -> AgentState:
 
 
 def issue_analysis_node(state: AgentState) -> AgentState:
-    """
-    1. Loads the knowledge graph for the repo and recommends issues.
-    2. Presents up to 3 issues in plain language.
-    3. Waits for the user to pick one.
-    """
     messages = state.get("messages") or []
     repo_id = state.get("repo_id")
     skills: list[dict] = state.get("user_skills") or []
@@ -181,12 +181,11 @@ def issue_analysis_node(state: AgentState) -> AgentState:
                 "messages": _assistant(messages, reply),
                 "conversation_phase": "analysis",
             }
-        # Filter by experience band
+
         band = skills[0].get("band", "beginner") if skills else "beginner"
         if band == "beginner":
             raw_results = [r for r in raw_results if len(r.get("skills", [])) <= 4]
 
-        # Annotate with novelty score
         flagged = []
         for r in raw_results:
             try:
@@ -226,12 +225,11 @@ def issue_analysis_node(state: AgentState) -> AgentState:
                 (r for r in recommendations if str(r.get("id")) == picked), None
             )
             if selected:
-                next_phase = "guidance"
                 return {
                     **state,
                     "messages": messages,
                     "selected_issue": selected,
-                    "conversation_phase": next_phase,
+                    "conversation_phase": "guidance",  # ← fixed
                 }
 
     # ── Present issues ────────────────────────────────────────────────────────

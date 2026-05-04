@@ -1,7 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:is(.dark,.dark *));
 
 @layer base {
   :root {
@@ -19,6 +19,8 @@
     --card-foreground: 240 10% 10%;
     --radius: 0.625rem;
     --grid-color: rgba(0, 0, 0, 0.04);
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 10%;
   }
 
   .dark {
@@ -35,6 +37,8 @@
     --card: 240 5% 10%;
     --card-foreground: 220 15% 85%;
     --grid-color: rgba(255, 255, 255, 0.06);
+    --popover: 240 5% 10%;
+    --popover-foreground: 220 15% 85%;
     color-scheme: dark;
   }
 
@@ -70,6 +74,8 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  --color-popover: hsl(var(--popover) / <alpha-value>);
+  --color-popover-foreground: hsl(var(--popover-foreground) / <alpha-value>);
 }
 
 /* ─── Animations ─── */
@@ -128,3 +134,30 @@
 
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* ─── Login form additions ─── */
+@keyframes gradient-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+.animate-gradient {
+  background-size: 200% 200%;
+  animation: gradient-shift 8s ease infinite;
+}
+
+@keyframes blob {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(30px, -40px) scale(1.1); }
+  66% { transform: translate(-20px, 30px) scale(0.95); }
+}
+.animate-blob { animation: blob 14s ease-in-out infinite; }
+.animation-delay-2000 { animation-delay: 2s; }
+.animation-delay-4000 { animation-delay: 4s; }
+
+/* Subtle grid background (matches your screenshots) */
+.bg-grid {
+  background-image:
+    linear-gradient(to right, var(--grid-color) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-color) 1px, transparent 1px);
+  background-size: 36px 36px;
+}
