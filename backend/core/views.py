@@ -1,10 +1,12 @@
 # backend/core/services/agents/views.py
+from django.contrib.auth.models import User
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from django.contrib.auth.models import User
+from rest_framework_simplejwt.tokens import RefreshToken
+
 from .models import ConversationSession, LearnerProfile, Recommendation, Repository
 from .serializers import (
     ChatMessageSerializer,
@@ -200,9 +202,11 @@ class LearnerProfileView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)
-    
+
+
 class SignupView(APIView):
     permission_classes = []
+
     def post(self, request):
         username = request.data.get("username")
         email = request.data.get("email")
@@ -217,19 +221,14 @@ class SignupView(APIView):
         if User.objects.filter(email=email).exists():
             return Response({"error": "Email already exists"}, status=400)
 
-        user = User.objects.create_user(
-            username=username,
-            email=email,
-            password=password
-        )
+        _ = User.objects.create_user(username=username, email=email, password=password)
 
         return Response({"message": "User created"})
 
-from django.contrib.auth.models import User
-from rest_framework_simplejwt.tokens import RefreshToken
 
 class LoginView(APIView):
     permission_classes = []
+
     def post(self, request):
         email = request.data.get("email")
         password = request.data.get("password")
@@ -244,8 +243,10 @@ class LoginView(APIView):
 
         refresh = RefreshToken.for_user(user)
 
-        return Response({
-            "access": str(refresh.access_token),
-            "refresh": str(refresh),
-            "username": user.username
-        })
+        return Response(
+            {
+                "access": str(refresh.access_token),
+                "refresh": str(refresh),
+                "username": user.username,
+            }
+        )

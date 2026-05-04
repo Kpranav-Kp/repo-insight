@@ -5,13 +5,12 @@ from .views import (
     ChatResultView,
     ChatSessionView,
     LearnerProfileView,
+    LoginView,
     RecommendationFeedbackView,
     RepositoryAnalyzeView,
     RepositoryStatusView,
-    UpdateSessionSkillsView,
-    LoginView,
     SignupView,
-
+    UpdateSessionSkillsView,
 )
 
 urlpatterns = [

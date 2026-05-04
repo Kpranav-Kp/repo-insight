@@ -128,7 +128,6 @@ def onboarding_node(state: AgentState) -> AgentState:
             return {
                 **state,
                 "user_skills": skills,
-                "intent": "learn",  # always learn
                 "messages": _assistant(messages, reply),
                 "conversation_phase": "analysis",
             }
@@ -226,7 +225,6 @@ def issue_analysis_node(state: AgentState) -> AgentState:
                 (r for r in recommendations if str(r.get("id")) == picked), None
             )
             if selected:
-                next_phase = "guidance"
                 return {
                     **state,
                     "messages": messages,
