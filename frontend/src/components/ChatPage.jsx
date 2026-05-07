@@ -11,11 +11,10 @@ export default function ChatPage({ onLogout }) {
   const [sidebar, setSidebar] = useState("chat"); // "explore" | "chat" | "history" | "saved"
   const [activeSession, setActiveSession] = useState(null);
   const [chatKey, setChatKey] = useState(0);
-  const user = { 
-  email: localStorage.getItem("email"),
-  name: localStorage.getItem("username")
+  const user = {
+    email: localStorage.getItem("email"),
+    name: localStorage.getItem("username"),
   };
-  console.log("user:", user); // add this
   const handleLogout = () => {
     localStorage.removeItem("access_token");
     localStorage.removeItem("user");
@@ -48,13 +47,18 @@ export default function ChatPage({ onLogout }) {
         aria-hidden
         className="pointer-events-none absolute inset-0 overflow-hidden"
       >
-        <div className="absolute -left-24 top-0 h-[420px] w-[420px] rounded-full bg-violet-600/15 blur-3xl" />
-        <div className="absolute -right-24 bottom-0 h-[420px] w-[420px] rounded-full bg-indigo-600/15 blur-3xl" />
+        <div className="absolute -left-24 top-0 h-105 w-105 rounded-full bg-violet-600/15 blur-3xl" />
+        <div className="absolute -right-24 bottom-0 h-105 w-105 rounded-full bg-indigo-600/15 blur-3xl" />
       </div>
 
       <div className="relative mx-auto flex h-screen max-w-6xl gap-0 p-4">
         <div className="flex w-full overflow-hidden rounded-2xl border border-border/60 bg-card/40 shadow-2xl shadow-violet-950/30 backdrop-blur-xl">
-          <ChatSidebar active={sidebar} onChange={handleSidebar} onLogout={handleLogout} user={user} />
+          <ChatSidebar
+            active={sidebar}
+            onChange={handleSidebar}
+            onLogout={handleLogout}
+            user={user}
+          />
 
           <main className="flex min-w-0 flex-1 flex-col">
             <div className="flex items-center justify-between border-b border-border/50 px-6 pt-4">
@@ -120,7 +124,7 @@ function TabButton({ active, onClick, children }) {
     >
       {children}
       {active && (
-        <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 dark:from-indigo-400 dark:via-violet-400 dark:to-purple-400" />
+        <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-linear-to-r from-indigo-600 via-violet-600 to-purple-600 dark:from-indigo-400 dark:via-violet-400 dark:to-purple-400" />
       )}
     </button>
   );

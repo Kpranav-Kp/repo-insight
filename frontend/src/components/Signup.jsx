@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
-export default function Signup({onSignupSuccess, goToLogin}) {
+export default function Signup({ onSignupSuccess, goToLogin }) {
   const [showPassword, setShowPassword] = useState(false);
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
@@ -30,10 +30,10 @@ export default function Signup({onSignupSuccess, goToLogin}) {
         setError("Signup failed. Try different credentials.");
         setLoading(false);
         return;
-    }
+      }
       setLoading(false);
       onSignupSuccess?.();
-    } catch (err) {
+    } catch (_err) {
       setError("Network error — is backend running?");
       setLoading(false);
     }
@@ -41,8 +41,6 @@ export default function Signup({onSignupSuccess, goToLogin}) {
 
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-background bg-grid flex items-center justify-center px-4 py-12">
-      
-      {/* Animated background (same as login) */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute -top-24 -left-24 h-96 w-96 rounded-full bg-primary/30 blur-3xl animate-blob" />
         <div className="absolute top-1/3 -right-24 h-96 w-96 rounded-full bg-primary/20 blur-3xl animate-blob animation-delay-2000" />
@@ -50,12 +48,11 @@ export default function Signup({onSignupSuccess, goToLogin}) {
       </div>
 
       <Card className="relative z-10 w-full max-w-md border-border/60 bg-card/70 backdrop-blur-xl shadow-2xl shadow-primary/10 p-8 rounded-2xl">
-        
-        <div className="pointer-events-none absolute -inset-px rounded-2xl bg-gradient-to-br from-primary/40 via-transparent to-fuchsia-500/30 opacity-60 p-px" />
+        <div className="pointer-events-none absolute -inset-px rounded-2xl bg-linear-to-br from-primary/40 via-transparent to-fuchsia-500/30 opacity-60 p-px" />
 
         {/* Brand */}
         <div className="flex items-center gap-2 mb-6">
-          <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-primary to-violet-600 flex items-center justify-center font-bold text-primary-foreground">
+          <div className="h-9 w-9 rounded-lg bg-linear-to-br from-primary to-violet-600 flex items-center justify-center font-bold text-primary-foreground">
             R
           </div>
           <span className="font-display text-lg font-semibold">
@@ -69,7 +66,7 @@ export default function Signup({onSignupSuccess, goToLogin}) {
 
         <h1 className="font-display text-3xl font-bold">
           Start{" "}
-          <span className="bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 bg-clip-text text-transparent">
+          <span className="bg-linear-to-r from-indigo-600 via-violet-600 to-purple-600 bg-clip-text text-transparent">
             building.
           </span>
         </h1>
@@ -89,10 +86,14 @@ export default function Signup({onSignupSuccess, goToLogin}) {
 
         {/* FORM */}
         <form className="space-y-4" onSubmit={handleSignup}>
-          
           {/* Username */}
           <div className="space-y-1.5">
-            <label className="text-xs text-muted-foreground">Username</label>
+            <label
+              htmlFor="signup-username"
+              className="text-xs text-muted-foreground"
+            >
+              Username
+            </label>
             <div className="relative">
               <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -108,7 +109,12 @@ export default function Signup({onSignupSuccess, goToLogin}) {
 
           {/* Email */}
           <div className="space-y-1.5">
-            <label className="text-xs text-muted-foreground">Email</label>
+            <label
+              htmlFor="signup-email"
+              className="text-xs text-muted-foreground"
+            >
+              Email
+            </label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -124,7 +130,12 @@ export default function Signup({onSignupSuccess, goToLogin}) {
 
           {/* Password */}
           <div className="space-y-1.5">
-            <label className="text-xs text-muted-foreground">Password</label>
+            <label
+              htmlFor="signup-password"
+              className="text-xs text-muted-foreground"
+            >
+              Password
+            </label>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -150,7 +161,7 @@ export default function Signup({onSignupSuccess, goToLogin}) {
           <Button
             type="submit"
             disabled={loading}
-            className="w-full bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600"
+            className="w-full bg-linear-to-r from-indigo-600 via-violet-600 to-purple-600"
           >
             {loading ? "Creating..." : "Sign up"}
             <ArrowRight className="ml-2 h-4 w-4" />
@@ -158,13 +169,14 @@ export default function Signup({onSignupSuccess, goToLogin}) {
         </form>
 
         <p className="mt-6 text-center text-sm text-muted-foreground">
-            Already have an account?{" "}
-            <span
-                onClick={goToLogin}
-                className="text-primary hover:underline cursor-pointer"
-            >
-                Log in
-            </span>
+          Already have an account?{" "}
+          <button
+            type="button"
+            onClick={goToLogin}
+            className="text-primary hover:underline cursor-pointer bg-transparent border-none p-0 text-sm"
+          >
+            Log in
+          </button>
         </p>
       </Card>
     </div>

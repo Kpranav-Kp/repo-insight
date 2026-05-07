@@ -54,7 +54,15 @@ export function SessionHistory({ onResume, activeLocalId }) {
           </p>
         )}
         {filtered.map((s) => (
-          <article
+          <div
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onResume?.(s);
+              }
+            }}
             key={s.localId}
             onClick={() => onResume?.(s)}
             className={cn(
@@ -87,7 +95,7 @@ export function SessionHistory({ onResume, activeLocalId }) {
             <footer className="mt-3 text-[10px] uppercase tracking-wider text-muted-foreground">
               {new Date(s.updatedAt).toLocaleString()}
             </footer>
-          </article>
+          </div>
         ))}
       </div>
     </div>

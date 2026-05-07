@@ -11,7 +11,7 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   */
 }
-export default function Login({ onLoginSuccess , goToSignup }) {
+export default function Login({ onLoginSuccess, _goToSignup }) {
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -37,15 +37,13 @@ export default function Login({ onLoginSuccess , goToSignup }) {
       }
 
       const data = await res.json();
-
-      // 👇 THE TWO LINES YOU ASKED ABOUT GO HERE
       localStorage.setItem("access_token", data.access);
       if (data.refresh) localStorage.setItem("refresh_token", data.refresh);
       localStorage.setItem("username", data.username);
       localStorage.setItem("email", email);
       setLoading(false);
-      onLoginSuccess?.(); // tell App.jsx to switch to <ChatPage />
-    } catch (err) {
+      onLoginSuccess?.();
+    } catch (_err) {
       setError("Network error — is the backend running?");
       setLoading(false);
     }
@@ -63,11 +61,11 @@ export default function Login({ onLoginSuccess , goToSignup }) {
       {/* Card */}
       <Card className="relative z-10 w-full max-w-md border-border/60 bg-card/70 backdrop-blur-xl shadow-2xl shadow-primary/10 p-8 rounded-2xl">
         {/* Glow border accent */}
-        <div className="pointer-events-none absolute -inset-px rounded-2xl bg-gradient-to-br from-primary/40 via-transparent to-fuchsia-500/30 opacity-60 [mask:linear-gradient(#000,#000)_content-box,linear-gradient(#000,#000)] [mask-composite:exclude] p-px" />
+        <div className="pointer-events-none absolute -inset-px rounded-2xl bg-linear-to-br from-primary/40 via-transparent to-fuchsia-500/30 opacity-60 [mask:linear-gradient(#000,#000)_content-box,linear-gradient(#000,#000)] mask:exclude p-px" />
 
         {/* Brand */}
         <div className="flex items-center gap-2 mb-6">
-          <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-primary to-violet-600 flex items-center justify-center font-bold text-primary-foreground shadow-lg shadow-primary/30">
+          <div className="h-9 w-9 rounded-lg bg-linear-to-br from-primary to-violet-600 flex items-center justify-center font-bold text-primary-foreground shadow-lg shadow-primary/30">
             R
           </div>
           <span className="font-display text-lg font-semibold tracking-tight">
@@ -85,7 +83,7 @@ export default function Login({ onLoginSuccess , goToSignup }) {
         <h1 className="font-display text-3xl font-bold leading-tight">
           Log in to{" "}
           <span
-            className="bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 
+            className="bg-linear-to-r from-indigo-600 via-violet-600 to-purple-600 
 dark:from-indigo-400 dark:via-violet-400 dark:to-purple-400 bg-clip-text text-transparent animate-gradient"
           >
             keep building.
@@ -107,7 +105,10 @@ dark:from-indigo-400 dark:via-violet-400 dark:to-purple-400 bg-clip-text text-tr
         {/* Form */}
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-muted-foreground">
+            <label
+              htmlFor="login-email"
+              className="text-xs font-medium text-muted-foreground"
+            >
               Email
             </label>
             <div className="relative">
@@ -125,12 +126,18 @@ dark:from-indigo-400 dark:via-violet-400 dark:to-purple-400 bg-clip-text text-tr
 
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-medium text-muted-foreground">
+              <label
+                htmlFor="login-email"
+                className="text-xs font-medium text-muted-foreground"
+              >
                 Password
               </label>
-              <a href="#" className="text-xs text-primary hover:underline">
+              <button
+                type="button"
+                className="text-xs text-primary hover:underline bg-transparent border-none cursor-pointer"
+              >
                 Forgot?
-              </a>
+              </button>
             </div>
             <div className="relative">
               <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -161,14 +168,12 @@ dark:from-indigo-400 dark:via-violet-400 dark:to-purple-400 bg-clip-text text-tr
           <Button
             type="submit"
             disabled={loading}
-            className="group w-full bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 text-primary-foreground hover:opacity-95 shadow-lg shadow-primary/30 transition"
+            className="group w-full bg-linear-to-r from-indigo-600 via-violet-600 to-purple-600 text-primary-foreground hover:opacity-95 shadow-lg shadow-primary/30 transition"
           >
             {loading ? "Logging in..." : "Log in"}
             <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-0.5" />
           </Button>
         </form>
-
-        
 
         {/* Terminal-like footer chip (matches dark screenshot) */}
         <div className="mt-6 rounded-md border border-border/70 bg-secondary/40 px-3 py-2 font-mono text-[11px] text-muted-foreground">

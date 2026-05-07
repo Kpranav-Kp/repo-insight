@@ -443,7 +443,7 @@ const Features = [
   },
 ];
 
-const LandingPage = ({ onLoginSuccess,goToSignup}) => {
+const LandingPage = ({ onLoginSuccess }) => {
   const scrollContainerRef = useRef(null);
   const [loginOpen, setLoginOpen] = useState(false);
   const [signupOpen, setSignupOpen] = useState(false);
@@ -552,8 +552,8 @@ const LandingPage = ({ onLoginSuccess,goToSignup}) => {
               <DialogContent className="p-0 sm:max-w-md border-border/70 bg-transparent shadow-none">
                 <Login
                   onLoginSuccess={() => {
-                    setLoginOpen(false);      // close popup
-                    onLoginSuccess();         // go to chat
+                    setLoginOpen(false); // close popup
+                    onLoginSuccess(); // go to chat
                   }}
                 />
               </DialogContent>

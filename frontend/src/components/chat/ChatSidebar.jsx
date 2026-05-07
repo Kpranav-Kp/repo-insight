@@ -1,5 +1,6 @@
 import { MessageSquare, History, LogOut } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+
 import { cn } from "@/lib/utils";
 
 const items = [
@@ -33,7 +34,7 @@ export function ChatSidebar({ active, onChange, onLogout, user }) {
       const rect = avatarRef.current.getBoundingClientRect();
 
       setMenuPos({
-        top: rect.top - 180,   // 👈 above avatar (adjust if needed)
+        top: rect.top - 180, // 👈 above avatar (adjust if needed)
         left: rect.left - 400, // 👈 shift into green area
       });
     }
@@ -50,7 +51,6 @@ export function ChatSidebar({ active, onChange, onLogout, user }) {
 
   return (
     <aside className="flex w-14 flex-col items-center justify-between border-r border-border/50 bg-card/40 py-4 backdrop-blur-sm">
-      
       {/* Top icons */}
       <div className="flex flex-col items-center gap-2">
         {items.map(({ key, icon: Icon, label }) => {
@@ -63,8 +63,8 @@ export function ChatSidebar({ active, onChange, onLogout, user }) {
               className={cn(
                 "flex h-10 w-10 items-center justify-center rounded-xl transition-all",
                 isActive
-                  ? "bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-600 text-white shadow-lg"
-                  : "text-muted-foreground hover:bg-violet-600/15 hover:text-foreground"
+                  ? "bg-linear-to-br from-indigo-600 via-violet-600 to-purple-600 text-white shadow-lg"
+                  : "text-muted-foreground hover:bg-violet-600/15 hover:text-foreground",
               )}
             >
               <Icon className="h-5 w-5" />
@@ -76,14 +76,14 @@ export function ChatSidebar({ active, onChange, onLogout, user }) {
       {/* Avatar */}
       <div className="flex flex-col items-center gap-3">
         <div className="relative">
-          <div
+          <button
             ref={avatarRef}
             onClick={openMenu}
-            title={user?.email || "Profile"}
-            className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-600 text-xs font-semibold text-white"
+            className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-linear-to-br from-indigo-600 via-violet-600 to-purple-600 text-xs font-semibold text-white"
+            aria-label="User menu"
           >
             {initials}
-          </div>
+          </button>
         </div>
       </div>
 
@@ -92,7 +92,7 @@ export function ChatSidebar({ active, onChange, onLogout, user }) {
         <div
           ref={menuRef}
           style={{ top: menuPos.top, left: menuPos.left }}
-          className="fixed z-[99999] w-60 rounded-xl border border-violet-400/30 bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-600 p-4 shadow-2xl text-white"
+          className="fixed z-[99999] w-60 rounded-xl border border-violet-400/30 bg-linear-to-br from-indigo-600 via-violet-600 to-purple-600 p-4 shadow-2xl text-white"
         >
           {/* User info */}
           <div className="flex items-center gap-2 border-b border-white/20 pb-2">

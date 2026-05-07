@@ -19,9 +19,5 @@ export default function App() {
     return <ChatPage user={user} onLogout={handleLogout} />;
   }
 
-  return (
-    <LandingPage
-      onLoginSuccess={() => setView("chat")}
-    />
-  );
+  return <LandingPage onLoginSuccess={() => setView("chat")} />;
 }

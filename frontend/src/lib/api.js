@@ -24,7 +24,9 @@ async function request(path, options = {}) {
   try {
     data = text ? JSON.parse(text) : null;
   } catch {
-    throw new Error(`Server returned non-JSON response (${res.status}): ${text.slice(0, 120)}`);
+    throw new Error(
+      `Server returned non-JSON response (${res.status}): ${text.slice(0, 120)}`,
+    );
   }
   if (!res.ok) {
     const msg =
