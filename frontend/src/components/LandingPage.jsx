@@ -560,15 +560,14 @@ const LandingPage = ({ onLoginSuccess }) => {
             </Dialog>
 
             <Dialog open={signupOpen} onOpenChange={setSignupOpen}>
-              <DialogTrigger asChild>
-                <Button
-                  size="sm"
-                  className="hidden sm:inline-flex text-sm font-semibold shadow-md shadow-primary/15"
-                  onClick={() => setSignupOpen(true)}
-                >
-                  Sign up
-                </Button>
-              </DialogTrigger>
+              <DialogTrigger
+                render={
+                  <button className="inline-flex items-center justify-center rounded-lg border border-transparent bg-primary text-primary-foreground text-sm font-semibold shadow-md shadow-primary/15 h-7 px-2.5">
+                    Sign up
+                  </button>
+                }
+                nativeButton={false}
+              />
 
               <DialogContent className="p-0 sm:max-w-md border-border/70 bg-transparent shadow-none">
                 <Signup
@@ -723,7 +722,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                       </span>
                     </CardTitle>
 
-                    <CardDescription asChild>
+                    <CardDescription>
                       <div className="space-y-2">
                         <p className="text-sm font-medium text-foreground font-sans leading-relaxed">
                           {feature.lead}

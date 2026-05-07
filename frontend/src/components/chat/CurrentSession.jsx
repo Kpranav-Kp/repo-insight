@@ -293,13 +293,14 @@ function MessageBubble({ msg }) {
         {isUser ? (
           <span>{msg.content}</span>
         ) : (
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            rehypePlugins={[rehypeHighlight]}
-            className="prose prose-sm dark:prose-invert max-w-none warp-break-words"
-          >
-            {msg.content}
-          </ReactMarkdown>
+          <div className="prose prose-sm dark:prose-invert max-w-none warp-break-words">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              rehypePlugins={[rehypeHighlight]}
+            >
+              {msg.content}
+            </ReactMarkdown>
+          </div>
         )}
         {msg.pending && (
           <span className="ml-1 inline-flex gap-1">

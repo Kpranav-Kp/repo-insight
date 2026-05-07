@@ -1,46 +1,36 @@
-import { MessageSquare, History, LogOut } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+// src/components/chat/ChatSidebar.jsx
+import { Popover } from "@base-ui/react/popover";
+import { ChevronLeft, ChevronRight, LogOut, Settings } from "lucide-react";
+import { useEffect, useState } from "react";
 
+import { loadSessions, deleteSession } from "@/lib/sessionStore";
 import { cn } from "@/lib/utils";
 
-const items = [
-  { key: "chat", icon: MessageSquare, label: "Chat" },
-  { key: "history", icon: History, label: "History" },
-];
+import { SettingsModal } from "./SettingsModal";
 
-export function ChatSidebar({ active, onChange, onLogout, user }) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef(null);
-  const avatarRef = useRef(null);
-  const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
+export function ChatSidebar({
+  onLogout,
+  user,
+  onSelectSession,
+  activeSessionId,
+  onNewChat,
+  onUsernameChange,
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [sessions, setSessions] = useState([]);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
+  // Refresh session list
   useEffect(() => {
-    function handleClick(e) {
-      if (
-        menuRef.current &&
-        !menuRef.current.contains(e.target) &&
-        avatarRef.current &&
-        !avatarRef.current.contains(e.target)
-      ) {
-        setMenuOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
+    const refresh = () => setSessions(loadSessions());
+    refresh();
+    window.addEventListener("sessions-updated", refresh);
+    window.addEventListener("storage", refresh);
+    return () => {
+      window.removeEventListener("sessions-updated", refresh);
+      window.removeEventListener("storage", refresh);
+    };
   }, []);
-
-  const openMenu = () => {
-    if (avatarRef.current) {
-      const rect = avatarRef.current.getBoundingClientRect();
-
-      setMenuPos({
-        top: rect.top - 180, // 👈 above avatar (adjust if needed)
-        left: rect.left - 400, // 👈 shift into green area
-      });
-    }
-
-    setMenuOpen((v) => !v);
-  };
 
   const initials = (user?.name || user?.email || "U")
     .split(" ")
@@ -49,80 +39,140 @@ export function ChatSidebar({ active, onChange, onLogout, user }) {
     .join("")
     .toUpperCase();
 
+  const handleDelete = (e, id) => {
+    e.stopPropagation();
+    deleteSession(id);
+  };
+
   return (
-    <aside className="flex w-14 flex-col items-center justify-between border-r border-border/50 bg-card/40 py-4 backdrop-blur-sm">
-      {/* Top icons */}
-      <div className="flex flex-col items-center gap-2">
-        {items.map(({ key, icon: Icon, label }) => {
-          const isActive = active === key;
-          return (
+    <>
+      {/* Settings modal (outside sidebar, rendered at document root) */}
+      <SettingsModal
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        user={user}
+        onUsernameChange={onUsernameChange}
+      />
+
+      <aside
+        className={cn(
+          "flex flex-col border-r border-border/50 bg-card/40 backdrop-blur-sm transition-all duration-300 h-full",
+          expanded ? "w-64" : "w-14",
+        )}
+      >
+        {/* Top: expand/collapse + New Chat button */}
+        <div className="flex items-center gap-2 p-2 border-b border-border/50">
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="p-2 rounded-lg hover:bg-violet-600/15 text-muted-foreground transition-colors"
+            aria-label={expanded ? "Collapse sidebar" : "Expand sidebar"}
+          >
+            {expanded ? (
+              <ChevronLeft className="h-4 w-4" />
+            ) : (
+              <ChevronRight className="h-4 w-4" />
+            )}
+          </button>
+
+          {expanded && (
             <button
-              key={key}
-              onClick={() => onChange(key)}
-              title={label}
-              className={cn(
-                "flex h-10 w-10 items-center justify-center rounded-xl transition-all",
-                isActive
-                  ? "bg-linear-to-br from-indigo-600 via-violet-600 to-purple-600 text-white shadow-lg"
-                  : "text-muted-foreground hover:bg-violet-600/15 hover:text-foreground",
-              )}
+              onClick={onNewChat}
+              className="flex-1 text-xs font-medium bg-linear-to-r from-indigo-600 to-purple-600 text-white py-1.5 rounded-lg transition-opacity hover:opacity-90"
             >
-              <Icon className="h-5 w-5" />
+              + New Chat
             </button>
-          );
-        })}
-      </div>
-
-      {/* Avatar */}
-      <div className="flex flex-col items-center gap-3">
-        <div className="relative">
-          <button
-            ref={avatarRef}
-            onClick={openMenu}
-            className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-linear-to-br from-indigo-600 via-violet-600 to-purple-600 text-xs font-semibold text-white"
-            aria-label="User menu"
-          >
-            {initials}
-          </button>
+          )}
         </div>
-      </div>
 
-      {/* Popup */}
-      {menuOpen && (
-        <div
-          ref={menuRef}
-          style={{ top: menuPos.top, left: menuPos.left }}
-          className="fixed z-[99999] w-60 rounded-xl border border-violet-400/30 bg-linear-to-br from-indigo-600 via-violet-600 to-purple-600 p-4 shadow-2xl text-white"
-        >
-          {/* User info */}
-          <div className="flex items-center gap-2 border-b border-white/20 pb-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-white">
-              {initials}
-            </div>
+        {/* Session list (visible when expanded) */}
+        {expanded && (
+          <div className="flex-1 overflow-y-auto p-2 space-y-1">
+            {sessions.length === 0 && (
+              <p className="text-xs text-muted-foreground text-center py-8">
+                No saved sessions
+              </p>
+            )}
 
-            <div className="min-w-0">
-              <div className="text-sm font-semibold truncate">
-                {user?.name || "User"}
+            {sessions.map((s) => (
+              <div key={s.localId} className="group relative">
+                <button
+                  onClick={() => onSelectSession?.(s)}
+                  className={cn(
+                    "w-full text-left truncate text-xs p-2 rounded-lg transition-colors pr-8",
+                    activeSessionId === s.localId
+                      ? "bg-violet-600/20 text-foreground"
+                      : "text-muted-foreground hover:bg-violet-600/15 hover:text-foreground",
+                  )}
+                >
+                  <div className="truncate">{s.repoLabel || "Untitled"}</div>
+                  <div className="text-[10px] text-muted-foreground/60 mt-0.5">
+                    {s.phase || ""}
+                  </div>
+                </button>
+
+                <button
+                  onClick={(e) => handleDelete(e, s.localId)}
+                  className="absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                  aria-label="Delete session"
+                >
+                  <span className="text-xs">×</span>
+                </button>
               </div>
-              <div className="text-xs text-white/70 truncate">
-                {user?.email || "user@example.com"}
-              </div>
-            </div>
+            ))}
           </div>
+        )}
 
-          {/* Logout */}
-          <button
-            onClick={() => {
-              setMenuOpen(false);
-              onLogout?.();
-            }}
-            className="mt-2 flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-red-300 hover:bg-white/10"
-          >
-            <LogOut className="h-4 w-4" />
-            Log out
-          </button>
+        {/* Bottom: avatar + settings popover */}
+        <div className="p-2 border-t border-border/50">
+          <Popover.Root>
+            <Popover.Trigger
+              className={cn(
+                "w-full flex items-center gap-2 p-2 rounded-lg transition-colors",
+                "text-muted-foreground hover:bg-violet-600/15 hover:text-foreground",
+                expanded ? "justify-start" : "justify-center",
+              )}
+              aria-label="User menu"
+            >
+              <div className="h-8 w-8 rounded-full bg-linear-to-br from-indigo-600 to-purple-600 flex items-center justify-center text-white text-xs font-semibold shrink-0">
+                {initials}
+              </div>
+              {expanded && (
+                <span className="text-xs font-medium truncate">
+                  {user?.name || "User"}
+                </span>
+              )}
+            </Popover.Trigger>
+
+            <Popover.Portal>
+              <Popover.Positioner>
+                <Popover.Popup className="z-50 w-52 rounded-xl border border-border/60 bg-card p-2 shadow-xl backdrop-blur-md">
+                  <div className="px-2 py-1.5 text-xs text-muted-foreground truncate border-b border-border/50 mb-1">
+                    {user?.email || "user@example.com"}
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setSettingsOpen(true);
+                    }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm hover:bg-violet-600/15 transition-colors"
+                  >
+                    <Settings className="h-4 w-4" />
+                    Settings
+                  </button>
+
+                  <button
+                    onClick={() => onLogout?.()}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-red-400 hover:bg-red-500/10 transition-colors"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    Log out
+                  </button>
+                </Popover.Popup>
+              </Popover.Positioner>
+            </Popover.Portal>
+          </Popover.Root>
         </div>
-      )}
-    </aside>
+      </aside>
+    </>
   );
 }
