@@ -127,7 +127,7 @@ dark:from-indigo-400 dark:via-violet-400 dark:to-purple-400 bg-clip-text text-tr
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <label
-                htmlFor="login-email"
+                htmlFor="login-password"
                 className="text-xs font-medium text-muted-foreground"
               >
                 Password

@@ -293,7 +293,7 @@ function MessageBubble({ msg }) {
         {isUser ? (
           <span>{msg.content}</span>
         ) : (
-          <div className="prose prose-sm dark:prose-invert max-w-none warp-break-words">
+          <div className="prose prose-sm dark:prose-invert max-w-none break-words">
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               rehypePlugins={[rehypeHighlight]}
