@@ -171,7 +171,9 @@ SENTENCE_TRANSFORMER_MODEL = os.getenv(
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL")
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
+GROQ_API_KEYS = [
+    key.strip() for key in os.getenv("GROQ_API_KEYS", "").split(",") if key.strip()
+]
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 GITHUB_ISSUE_LIMIT = int(os.getenv("GITHUB_ISSUE_LIMIT", 300))

@@ -11,16 +11,16 @@ Review      → validates approach, checks novelty, produces PR outline
 import json
 import logging
 
+from core.services.token_rotator import TokenRotator
 from django.conf import settings
+from pydantic import SecretStr
 
 from ..graph_loader import load_engine_for_repo
 from .state import AgentState
 from .tools import fetch_contributing_guidelines, fetch_repo_skills
 
 logger = logging.getLogger(__name__)
-
-
-# ── LLM ───────────────────────────────────────────────────────────────────────
+_groq_rotator = TokenRotator(settings.GROQ_API_KEYS)
 
 
 def get_llm():
@@ -28,7 +28,7 @@ def get_llm():
 
     return ChatGroq(
         model="llama-3.1-8b-instant",
-        api_key=settings.GROQ_API_KEY,
+        api_key=SecretStr(_groq_rotator.next()),
         temperature=0.7,
     )
 
@@ -42,9 +42,6 @@ def llm_respond(system_prompt: str, messages: list[dict]) -> str:
     except Exception as exc:
         logger.exception("LLM call failed: %s", exc)
         return "I'm having trouble connecting right now. Please try again."
-
-
-# ── HELPERS ───────────────────────────────────────────────────────────────────
 
 
 def _last_user_message(messages: list[dict]) -> str:
@@ -65,9 +62,6 @@ def _repo_id_from_url(repo_url: str) -> str:
     return "/".join(parts[-2:]) if len(parts) >= 2 else repo_url
 
 
-# ── AGENT 1: ONBOARDING ───────────────────────────────────────────────────────
-
-
 def onboarding_node(state: AgentState) -> AgentState:
     """
     Collects user_skills and intent only.
@@ -84,7 +78,6 @@ def onboarding_node(state: AgentState) -> AgentState:
             "conversation_phase": "onboarding",
         }
 
-    # ── 2. Collect user_skills (no URL detection) ────────────────────────────
     if not state.get("user_skills"):
         if len(messages) <= 1:
             repo_skills = fetch_repo_skills.invoke(repo_url)
@@ -123,8 +116,7 @@ def onboarding_node(state: AgentState) -> AgentState:
             skills = []
 
         if skills:
-            # Skills collected — move to analysis, intent always = learn
-            reply = "Great! Let me find the best issues for you — one moment. 🔍"
+            reply = "Great! Let me find the best issues for you — one moment."
             return {
                 **state,
                 "user_skills": skills,
@@ -145,17 +137,7 @@ def onboarding_node(state: AgentState) -> AgentState:
                 "conversation_phase": "onboarding",
             }
 
-        reply = "Great! Let me find the best issues for you — one moment. 🔍"
-        return {
-            **state,
-            "messages": _assistant(messages, reply),
-            "conversation_phase": "analysis",
-        }
-
     return {**state, "conversation_phase": "analysis"}
-
-
-# ── AGENT 2: ISSUE ANALYSIS ───────────────────────────────────────────────────
 
 
 def issue_analysis_node(state: AgentState) -> AgentState:
@@ -164,11 +146,9 @@ def issue_analysis_node(state: AgentState) -> AgentState:
     skills: list[dict] = state.get("user_skills") or []
     skill_names = [s["skill"] for s in skills]
 
-    # ── If the user already picked an issue, route forward ───────────────────
     if state.get("selected_issue"):
         return {**state, "conversation_phase": "guidance"}
 
-    # ── Build recommendations once ────────────────────────────────────────────
     if not state.get("recommendations"):
         try:
             engine = load_engine_for_repo(repo_id)
@@ -201,7 +181,6 @@ def issue_analysis_node(state: AgentState) -> AgentState:
 
     recommendations = state.get("recommendations") or []
 
-    # ── Check if the user just picked an issue ────────────────────────────────
     last = _last_user_message(messages)
     if last and recommendations:
         picked = (
@@ -229,10 +208,9 @@ def issue_analysis_node(state: AgentState) -> AgentState:
                     **state,
                     "messages": messages,
                     "selected_issue": selected,
-                    "conversation_phase": "guidance",  # ← fixed
+                    "conversation_phase": "guidance",
                 }
 
-    # ── Present issues ────────────────────────────────────────────────────────
     reply = llm_respond(
         f"""
         You are helping a developer pick a GitHub issue to work on.
@@ -258,9 +236,6 @@ def issue_analysis_node(state: AgentState) -> AgentState:
     }
 
 
-# ── AGENT 3: GUIDANCE ─────────────────────────────────────────────────────────
-
-
 def guidance_node(state: AgentState) -> AgentState:
     """
     Socratic loop — never gives code.
@@ -281,7 +256,6 @@ def guidance_node(state: AgentState) -> AgentState:
 
     last = _last_user_message(messages)
 
-    # ── Evaluate the user's latest answer ────────────────────────────────────
     if last:
         evaluation = llm_respond(
             f"""
@@ -332,7 +306,6 @@ def guidance_node(state: AgentState) -> AgentState:
                     "conversation_phase": "review",
                 }
             else:
-                # Vibe-coded — demand specifics
                 reply = llm_respond(
                     f"""
                     The user's answer seems too generic or AI-generated.
@@ -350,9 +323,7 @@ def guidance_node(state: AgentState) -> AgentState:
                     "conversation_phase": "guidance",
                 }
 
-        # INSUFFICIENT — increment stuck counter and decide whether to offer code assist
         stuck = state.get("stuck_counter", 0) + 1
-        # if user explicitly asks for help, or has been stuck twice, go to code assist
         if stuck >= 2 or "stuck" in last.lower() or "hint" in last.lower():
             return {
                 **state,
@@ -380,7 +351,6 @@ def guidance_node(state: AgentState) -> AgentState:
                 "conversation_phase": "guidance",
             }
 
-    # ── Skill-gap learning path (first visit, no answer yet) ─────────────────
     gaps = [s for s in issue_skills if s not in user_skills_list]
     if gaps:
         learning_path = llm_respond(
@@ -405,8 +375,6 @@ def guidance_node(state: AgentState) -> AgentState:
             "conversation_phase": "guidance",
         }
 
-    # ── First understanding question ──────────────────────────────────────────
-    # Fetch guidelines for context (used by LLM prompt, not returned to user directly)
     guidelines_context = ""
     try:
         guidelines_context = fetch_contributing_guidelines.invoke(repo_url)
@@ -438,9 +406,6 @@ def guidance_node(state: AgentState) -> AgentState:
     }
 
 
-# ── AGENT 4: REVIEW ───────────────────────────────────────────────────────────
-
-
 def review_node(state: AgentState) -> AgentState:
     """
     Validates the user's approach before they write code.
@@ -456,14 +421,12 @@ def review_node(state: AgentState) -> AgentState:
     repo_id = state.get("repo_id")
     user_approach = state.get("user_approach") or ""
 
-    # ── Fetch contributing guidelines ─────────────────────────────────────────
     guidelines = "No CONTRIBUTING.md found."
     try:
         guidelines = fetch_contributing_guidelines.invoke(repo_url)
     except Exception as exc:
         logger.warning("Could not fetch guidelines: %s", exc)
 
-    # ── Novelty score ─────────────────────────────────────────────────────────
     novelty = 1.0
     if user_approach and repo_id:
         try:
@@ -474,7 +437,6 @@ def review_node(state: AgentState) -> AgentState:
         except Exception as exc:
             logger.warning("Novelty score failed: %s", exc)
 
-    # ── Generate final review + PR outline ────────────────────────────────────
     reply = llm_respond(
         f"""
         Issue          : {json.dumps(selected_issue)}
@@ -537,7 +499,6 @@ def code_assist_node(state: AgentState) -> AgentState:
             "code_assist_count": code_assist_count,
         }
 
-    # Generate boilerplate with TODOs
     reply = llm_respond(
         f"""
         Issue: {json.dumps(selected_issue)}

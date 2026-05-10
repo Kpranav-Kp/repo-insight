@@ -39,7 +39,7 @@ def analyze_repository_task(repo_id: int):
 @shared_task
 def run_chat_task(session_id, current_state):
     session = ConversationSession.objects.get(id=session_id)
-    current_state["code_assit_count"] = session.code_assist_count
+    current_state["code_assist_count"] = session.code_assist_count
     current_state["stuck_counter"] = session.stuck_counter
 
     graph = build_graph()
