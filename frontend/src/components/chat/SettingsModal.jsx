@@ -1,4 +1,4 @@
-// src/components/chat/SettingsModal.jsx
+// frontend/src/components/chat/SettingsModal.jsx
 import { Sun, Moon, Check } from "lucide-react";
 import { useState } from "react";
 

@@ -5,6 +5,7 @@ from django.conf import settings
 
 from .models import ConversationSession, Repository
 from .services.agents.graph import build_graph
+from .services.graph_loader import clear_cache
 from .services.recommender import RecommendationEngine
 
 
@@ -28,6 +29,7 @@ def analyze_repository_task(repo_id: int):
         repo.prs_indexed = result["prs_indexed"]
         repo.skills_found = result["skills_found"]
         repo.save()
+        clear_cache(repo_id)
         return result
     except Exception as e:
         repo.status = "failed"
@@ -42,6 +44,8 @@ def run_chat_task(session_id, current_state):
     current_state["code_assist_count"] = session.code_assist_count
     current_state["stuck_counter"] = session.stuck_counter
 
+    current_state["user_id"] = session.user.pk
+    current_state["session_id"] = session.pk
     graph = build_graph()
     result = graph.invoke(current_state)
 

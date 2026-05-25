@@ -11,8 +11,10 @@ Review      → validates approach, checks novelty, produces PR outline
 import json
 import logging
 
+from core.models import Recommendation, Repository
 from core.services.token_rotator import TokenRotator
 from django.conf import settings
+from django.contrib.auth.models import User
 from pydantic import SecretStr
 
 from ..graph_loader import load_engine_for_repo
@@ -178,6 +180,29 @@ def issue_analysis_node(state: AgentState) -> AgentState:
             flagged.append(r)
 
         state = {**state, "recommendations": flagged}
+        repo = Repository.objects.get(id=repo_id)
+        user = User.objects.get(id=state["user_id"])
+        # Remove old recommendations for this user+repo (clean slate)
+        Recommendation.objects.filter(repository=repo, user=user).delete()
+
+        rec_objects = []
+        for rec in flagged:
+            rec_objects.append(
+                Recommendation(
+                    repository=repo,
+                    user=user,
+                    issue_id=str(rec["id"]),
+                    title=rec["title"],
+                    summary=rec.get("summary", ""),
+                    labels=rec.get("labels", []),
+                    skills=rec.get("skills", []),
+                    skills_matched=rec.get("skill_overlap", []),
+                    match_score=rec["match_score"],
+                    novelty_score=rec["novelty"],
+                    combined_score=rec["combined_score"],
+                )
+            )
+        Recommendation.objects.bulk_create(rec_objects)
 
     recommendations = state.get("recommendations") or []
 

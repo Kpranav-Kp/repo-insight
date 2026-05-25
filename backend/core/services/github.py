@@ -1,4 +1,4 @@
-# github.py
+# backend/core/services/github.py
 import re
 from dataclasses import dataclass, field
 

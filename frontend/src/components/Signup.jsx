@@ -1,3 +1,4 @@
+//frontend/src/components/Signup.jsx
 import { Mail, Lock, User, ArrowRight, Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
 

@@ -1,4 +1,4 @@
-# embeddings.py
+# backend/core/services/embeddings.py
 import json
 import os
 from collections import OrderedDict

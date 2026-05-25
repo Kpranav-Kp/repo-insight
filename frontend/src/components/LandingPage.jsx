@@ -1,3 +1,4 @@
+// frontend/src/components/LandingPage.jsx
 import { useRef, useEffect, useState } from "react";
 
 import Login from "@/components/Login";

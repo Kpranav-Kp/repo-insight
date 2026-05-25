@@ -1,4 +1,4 @@
-// src/components/ChatPage.jsx
+// frontend/src/components/ChatPage.jsx
 import { useState } from "react";
 
 import { ChatSidebar } from "@/components/chat/ChatSidebar";

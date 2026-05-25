@@ -1,5 +1,6 @@
 # backend/core/services/agents/views.py
 from django.contrib.auth.models import User
+from django.db import transaction
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -30,17 +31,31 @@ class RepositoryAnalyzeView(APIView):
                 {"error": "URL is required."}, status=status.HTTP_400_BAD_REQUEST
             )
 
-        repo, created = Repository.objects.get_or_create(url=url)
-        if repo.status == "completed" and repo.index_path:
-            return Response(RepositorySerializer(repo).data)
+        with transaction.atomic():
+            repo, _ = Repository.objects.select_for_update().get_or_create(url=url)
 
-        repo.status = "processing"
-        repo.error_message = ""
-        repo.save()
+            if repo.status == "completed" and repo.index_path:
+                return Response(RepositorySerializer(repo).data)
+
+            if repo.status == "processing":
+                return Response(
+                    {
+                        "message": "Repository analysis already in progress.",
+                        "repository_id": repo.pk,
+                        "task_id": repo.task_id,
+                    },
+                    status=status.HTTP_202_ACCEPTED,
+                )
+
+            repo.status = "processing"
+            repo.error_message = ""
+            repo.save()
 
         async_result = analyze_repository_task.delay(repo.pk)
+
         repo.task_id = async_result.id
-        repo.save()
+        repo.save(update_fields=["task_id"])
+
         return Response(
             {
                 "message": "Repository analysis started.",

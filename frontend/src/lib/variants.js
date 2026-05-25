@@ -1,4 +1,4 @@
-// src/lib/variants.js
+// frontend/src/lib/variants.js
 import { cva } from "class-variance-authority";
 
 export const badgeVariants = cva(

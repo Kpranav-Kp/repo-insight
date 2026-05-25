@@ -1,4 +1,4 @@
-// src/components/ui/button.jsx
+// frontend/src/components/ui/button.jsx
 import { Button as ButtonPrimitive } from "@base-ui/react/button";
 
 import { cn } from "@/lib/utils";

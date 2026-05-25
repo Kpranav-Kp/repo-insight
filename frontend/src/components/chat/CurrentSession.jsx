@@ -1,4 +1,4 @@
-// src/components/chat/CurrentSession.jsx
+// frontend/src/components/chat/CurrentSession.jsx
 import { Send, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";

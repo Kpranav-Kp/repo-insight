@@ -1,4 +1,4 @@
-// src/components/chat/ChatSidebar.jsx
+// frontend/src/components/chat/ChatSidebar.jsx
 import { Popover } from "@base-ui/react/popover";
 import { ChevronLeft, ChevronRight, LogOut, Settings } from "lucide-react";
 import { useEffect, useState } from "react";

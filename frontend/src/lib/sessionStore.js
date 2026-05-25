@@ -1,4 +1,4 @@
-// src/lib/sessionStore.js
+// frontend/src/lib/sessionStore.js
 // Saves chat sessions to localStorage so the user can resume them later.
 
 const getKey = () => {

@@ -1,3 +1,4 @@
+// frontend/src/components/ui/card.jsx
 import { cn } from "@/lib/utils";
 
 function Card({ className, size = "default", ...props }) {

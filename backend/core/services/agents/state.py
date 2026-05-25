@@ -16,3 +16,5 @@ class AgentState(TypedDict):
     recommendations: list[dict]  # filled by Issue Analysis Agent
     understanding_score: str  # SUFFICIENT | INSUFFICIENT
     user_approach: str | None
+    user_id: int
+    session_id: int
