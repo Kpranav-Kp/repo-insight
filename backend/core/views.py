@@ -1,6 +1,8 @@
 # backend/core/services/agents/views.py
+from django.conf import settings
 from django.contrib.auth.models import User
 from django.db import transaction
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -257,11 +259,36 @@ class LoginView(APIView):
             return Response({"error": "Invalid credentials"}, status=401)
 
         refresh = RefreshToken.for_user(user)
+        access_token = str(refresh.access_token)
+        refresh_token = str(refresh)
 
-        return Response(
+        response = JsonResponse(
             {
-                "access": str(refresh.access_token),
-                "refresh": str(refresh),
                 "username": user.username,
             }
         )
+        # Set httpOnly cookies
+        response.set_cookie(
+            "access_token",
+            access_token,
+            httponly=True,
+            secure=settings.SIMPLE_JWT["AUTH_COOKIE_SECURE"],
+            samesite=settings.SIMPLE_JWT["AUTH_COOKIE_SAMESITE"],
+        )
+        response.set_cookie(
+            "refresh_token",
+            refresh_token,
+            httponly=True,
+            secure=settings.SIMPLE_JWT["AUTH_COOKIE_SECURE"],
+            samesite=settings.SIMPLE_JWT["AUTH_COOKIE_SAMESITE"],
+        )
+
+
+class LogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        response = Response({"message": "Logged out"})
+        response.delete_cookie("access_token")
+        response.delete_cookie("refresh_token")
+        return response

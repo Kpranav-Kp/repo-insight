@@ -297,14 +297,17 @@ class SemanticGraph:
             if created_at_str:
                 try:
                     if isinstance(created_at_str, str):
-                        created_at = datetime.fromisoformat(
-                            created_at_str.replace("Z", "+00:00")
-                        )
-                    else:
+                        normalized = created_at_str.replace("Z", "+00:00")
+                        created_at = datetime.fromisoformat(normalized)
+                    elif isinstance(created_at_str, datetime):
                         created_at = created_at_str
+                    else:
+                        raise TypeError(
+                            f"Unexpected type for created_at: {type(created_at_str)}"
+                        )
                     months = (now - created_at).days / 30.44
                     decay = math.exp(-0.5 * months)
-                except Exception as e:
+                except (ValueError, TypeError) as e:
                     logger.warning(
                         "Failed to parse created_at '%s': %s", created_at_str, e
                     )

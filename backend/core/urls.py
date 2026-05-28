@@ -7,6 +7,7 @@ from .views import (
     ChatSessionView,
     LearnerProfileView,
     LoginView,
+    LogoutView,
     RecommendationFeedbackView,
     RepositoryAnalyzeView,
     RepositoryStatusView,
@@ -45,4 +46,5 @@ urlpatterns = [
     ),
     path("auth/signup/", SignupView.as_view()),
     path("auth/login/", LoginView.as_view()),
+    path("auth/logout/", LogoutView.as_view()),
 ]
