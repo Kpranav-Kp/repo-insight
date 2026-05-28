@@ -26,8 +26,11 @@ export default function ChatPage({ onLogout }) {
     setChatKey((k) => k + 1);
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem("access_token");
+  const handleLogout = async () => {
+    await fetch("http://localhost:8000/api/auth/logout/", {
+      method: "POST",
+      credentials: "include",
+    });
     localStorage.removeItem("username");
     localStorage.removeItem("email");
     onLogout?.();

@@ -18,7 +18,11 @@ async function request(path, options = {}) {
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const res = await fetch(`${BASE_URL}${path}`, { ...options, headers });
+  const res = await fetch(`${BASE_URL}${path}`, {
+    ...options,
+    headers,
+    credentials: "include",
+  });
   const text = await res.text();
   let data = null;
   try {

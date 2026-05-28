@@ -6,12 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-{
-  /*
-export default function Login() {
-  const [showPassword, setShowPassword] = useState(false);
-  */
-}
+
 export default function Login({ onLoginSuccess, _goToSignup }) {
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
@@ -38,8 +33,6 @@ export default function Login({ onLoginSuccess, _goToSignup }) {
       }
 
       const data = await res.json();
-      localStorage.setItem("access_token", data.access);
-      if (data.refresh) localStorage.setItem("refresh_token", data.refresh);
       localStorage.setItem("username", data.username);
       localStorage.setItem("email", email);
       setLoading(false);
