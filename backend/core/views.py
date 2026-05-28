@@ -281,7 +281,6 @@ class LoginView(APIView):
                 "username": user.username,
             }
         )
-        # Set httpOnly cookies
         response.set_cookie(
             "access_token",
             access_token,
@@ -296,6 +295,7 @@ class LoginView(APIView):
             secure=settings.SIMPLE_JWT["AUTH_COOKIE_SECURE"],
             samesite=settings.SIMPLE_JWT["AUTH_COOKIE_SAMESITE"],
         )
+        return response
 
 
 class LogoutView(APIView):

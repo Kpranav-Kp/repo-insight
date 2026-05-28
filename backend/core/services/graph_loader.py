@@ -1,17 +1,20 @@
 # backend/core/services/graph_loader.py
+
+import logging
+
 from django.conf import settings
 
 from ..models import Repository
 from .recommender import RecommendationEngine
 
-# cache so we don't reload every message
 _engine_cache = {}
+
+logger = logging.getLogger(__name__)
 
 
 def load_engine_for_repo(repo_id: int) -> RecommendationEngine:
     global _engine_cache
 
-    # return cached if already loaded
     if repo_id in _engine_cache:
         return _engine_cache[repo_id]
 
@@ -29,9 +32,8 @@ def load_engine_for_repo(repo_id: int) -> RecommendationEngine:
     engine.graph.prs._service.model_name = model_path
     engine.load_index(repo.index_path)
 
-    # save to cache
     _engine_cache[repo_id] = engine
-    print(f"[GraphLoader] Loaded engine for repo {repo_id}")
+    logger.info(f"Loaded engine for repo {repo_id}")
 
     return engine
 

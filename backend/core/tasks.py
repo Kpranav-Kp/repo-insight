@@ -1,12 +1,17 @@
+import logging
 import os
 
 from celery import shared_task
 from django.conf import settings
 
+from core.services.agents.tools import fetch_contributing_guidelines
+
 from .models import ConversationSession, Repository
 from .services.agents.graph import build_graph
 from .services.graph_loader import clear_cache
 from .services.recommender import RecommendationEngine
+
+logger = logging.getLogger(__name__)
 
 
 @shared_task
@@ -29,6 +34,12 @@ def analyze_repository_task(repo_id: int):
         repo.prs_indexed = result["prs_indexed"]
         repo.skills_found = result["skills_found"]
         repo.save()
+        try:
+            guidelines = fetch_contributing_guidelines.invoke(repo.url)
+            repo.contributing_guidelines = guidelines[:10000]
+            repo.save(update_fields=["contributing_guidelines"])
+        except Exception as e:
+            logger.warning(f"Could not fetch guidelines for {repo.url}: {e}")
         clear_cache(repo_id)
         return result
     except Exception as e:

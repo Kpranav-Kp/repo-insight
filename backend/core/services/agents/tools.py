@@ -65,3 +65,40 @@ def fetch_contributing_guidelines(repo_url: str) -> str:
             continue
 
     return "No CONTRIBUTING.md found for this repository."
+
+
+@tool
+def fetch_code_snippet(
+    repo_url: str, file_path: str, line_start: int = 0, line_end: int = 0
+) -> str:
+    """
+    Fetch a specific code file (or a range of lines) from the GitHub repository.
+    Useful for pointing the user to relevant functions or modules.
+    """
+    token = getattr(settings, "GITHUB_TOKEN", "")
+    try:
+        owner, repo = repo_url.rstrip("/").split("/")[-2:]
+    except ValueError:
+        return "Invalid repository URL."
+
+    api_url = f"https://api.github.com/repos/{owner}/{repo}/contents/{file_path}"
+    headers = {"Authorization": f"token {token}"} if token else {}
+
+    try:
+        response = http_requests.get(api_url, headers=headers, timeout=10)
+        if response.status_code != 200:
+            return f"Could not fetch file: {response.status_code}"
+        data = response.json()
+        if "content" not in data:
+            return "File content not found."
+        import base64
+
+        content = base64.b64decode(data["content"]).decode("utf-8")
+        lines = content.splitlines()
+        if line_end > 0:
+            lines = lines[line_start:line_end]
+        elif line_start > 0:
+            lines = lines[line_start - 1 : line_start + 10]
+        return "\n".join(lines[:50])
+    except Exception as e:
+        return f"Error fetching snippet: {str(e)}"

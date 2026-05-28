@@ -10,6 +10,7 @@ Review      → validates approach, checks novelty, produces PR outline
 
 import json
 import logging
+import re
 
 from core.models import Recommendation, Repository
 from core.services.token_rotator import TokenRotator
@@ -19,7 +20,7 @@ from pydantic import SecretStr
 
 from ..graph_loader import load_engine_for_repo
 from .state import AgentState
-from .tools import fetch_contributing_guidelines, fetch_repo_skills
+from .tools import fetch_code_snippet, fetch_repo_skills
 
 logger = logging.getLogger(__name__)
 _groq_rotator = TokenRotator(settings.GROQ_API_KEYS)
@@ -58,10 +59,17 @@ def _assistant(messages: list[dict], text: str) -> list[dict]:
     return [*messages, {"role": "assistant", "content": text}]
 
 
-def _repo_id_from_url(repo_url: str) -> str:
-    """Derive a stable string key from a GitHub URL (owner/repo)."""
-    parts = repo_url.rstrip("/").split("/")
-    return "/".join(parts[-2:]) if len(parts) >= 2 else repo_url
+def _extract_file_paths(text: str) -> list[str]:
+    """
+    Naively extract potential file paths from issue title/body.
+    Looks for common extensions: .py, .js, .ts, .java, .go, .rs, .cpp, .c, .h, .html, .css, etc.
+    Returns a list of unique matches.
+    """
+    extensions = r"\.(py|js|ts|java|go|rs|cpp|c|h|html|css|json|xml|yaml|yml|md|txt)"
+    pattern = r"\b[\w/\-\.]+" + extensions + r"\b"
+    matches = re.findall(pattern, text, re.IGNORECASE)
+    full_matches = [m[0] + m[1] for m in matches if m[0] and m[1]]
+    return list(set(full_matches))[:3]
 
 
 def onboarding_node(state: AgentState) -> AgentState:
@@ -276,6 +284,7 @@ def guidance_node(state: AgentState) -> AgentState:
     messages = state.get("messages") or []
     selected_issue = state.get("selected_issue") or {}
     repo_url = state.get("repo_url", "")
+    repo_id = state.get("repo_id")
     user_skills_list = [s["skill"] for s in (state.get("user_skills") or [])]
     issue_skills = selected_issue.get("skills") or []
 
@@ -402,7 +411,8 @@ def guidance_node(state: AgentState) -> AgentState:
 
     guidelines_context = ""
     try:
-        guidelines_context = fetch_contributing_guidelines.invoke(repo_url)
+        repo = Repository.objects.get(id=repo_id)
+        guidelines_context = repo.contributing_guidelines
     except Exception as e:
         logger.warning("Could not fetch guidelines: %s", e)
         guidelines_context = ""
@@ -442,13 +452,13 @@ def review_node(state: AgentState) -> AgentState:
     """
     messages = state.get("messages") or []
     selected_issue = state.get("selected_issue") or {}
-    repo_url = state.get("repo_url", "")
     repo_id = state.get("repo_id")
     user_approach = state.get("user_approach") or ""
 
     guidelines = "No CONTRIBUTING.md found."
     try:
-        guidelines = fetch_contributing_guidelines.invoke(repo_url)
+        repo = Repository.objects.get(id=repo_id)
+        guidelines = repo.contributing_guidelines
     except Exception as exc:
         logger.warning("Could not fetch guidelines: %s", exc)
 
@@ -503,10 +513,12 @@ def code_assist_node(state: AgentState) -> AgentState:
     """
     Provides boilerplate with TODOs, limited to MAX_ASSISTS per session.
     Increments code_assist_count; refuses after limit.
+    If possible, fetches a relevant code snippet from the repo as context.
     """
     messages = state.get("messages") or []
     selected_issue = state.get("selected_issue") or {}
     repo_url = state.get("repo_url", "")
+    repo_id = state.get("repo_id")
     code_assist_count = state.get("code_assist_count", 0)
     MAX_ASSISTS = 3
 
@@ -524,27 +536,56 @@ def code_assist_node(state: AgentState) -> AgentState:
             "code_assist_count": code_assist_count,
         }
 
-    reply = llm_respond(
-        f"""
-        Issue: {json.dumps(selected_issue)}
-        Repository: {repo_url}
-        User's previous understanding: {state.get("understanding_score", "unknown")}
+    context_snippet = ""
+    issue_title = selected_issue.get("title", "")
+    issue_summary = selected_issue.get("summary", "")
+    issue_text = f"{issue_title} {issue_summary}"
+    file_paths = _extract_file_paths(issue_text)
 
-        The user is stuck. Provide a **boilerplate code snippet** that outlines the structure needed.
-        - Include **`# TODO:` comments** for every part the user must fill in.
-        - Do NOT give a complete solution.
-        - Add a note that the user must write the actual logic themselves.
-        - Keep the code short and directly relevant to the issue.
+    if file_paths:
+        for file_path in file_paths:
+            snippet = fetch_code_snippet.invoke(
+                {"repo_url": repo_url, "file_path": file_path}
+            )
+            if (
+                snippet
+                and not snippet.startswith("Could not fetch")
+                and not snippet.startswith("Error")
+            ):
+                context_snippet = (
+                    f"\n**Relevant code from `{file_path}`:**\n```\n{snippet}\n```\n"
+                )
+                break
 
-        Example format:
-        ```python
-        def fix_problem(param):
-            # TODO: Understand what 'param' does and implement the core logic
-            pass
-        End with a question asking them to try filling the TODOs.
-        """,
-        messages,
-    )
+    guidelines_context = ""
+    try:
+        repo = Repository.objects.get(id=repo_id)
+        guidelines_context = repo.contributing_guidelines[:1000]
+    except Exception as e:
+        logger.warning("Could not fetch guidelines for repo %s: %s", repo_id, e)
+
+    prompt = f"""
+    Issue: {json.dumps(selected_issue)}
+    Repository: {repo_url}
+    User's previous understanding: {state.get("understanding_score", "unknown")}
+    Contributing Guidelines (excerpt): {guidelines_context[:500]}
+    {context_snippet}
+
+    The user is stuck. Provide a **boilerplate code snippet** that outlines the structure needed.
+    - Include **`# TODO:` comments** for every part the user must fill in.
+    - Use the provided code snippet (if any) to make the boilerplate relevant to the actual codebase.
+    - Do NOT give a complete solution.
+    - Add a note that the user must write the actual logic themselves.
+    - Keep the code short and directly relevant to the issue.
+
+    Example format:
+    ```python
+    def fix_problem(param):
+        # TODO: Understand what 'param' does and implement the core logic
+        pass
+    End with a question asking them to try filling the TODOs.
+    """
+    reply = llm_respond(prompt, messages)
     new_count = code_assist_count + 1
     logger.info(f"Code assist provided. Count now {new_count}/{MAX_ASSISTS}")
 
