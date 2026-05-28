@@ -76,7 +76,7 @@ class RecommendationSerializer(serializers.ModelSerializer):
 
 class ChatMessageSerializer(serializers.Serializer):
     session_id = serializers.IntegerField()
-    message = serializers.CharField(max_length=2000)
+    message = serializers.CharField(max_length=5000)
 
     def validate_session_id(self, value):
         request = self.context.get("request")

@@ -1,4 +1,6 @@
 # backend/core/services/agents/views.py
+import re
+
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.db import transaction
@@ -23,6 +25,11 @@ from .tasks import analyze_repository_task, run_chat_task
 # Create your views here.
 
 
+def is_valid_github_url(url: str) -> bool:
+    pattern = r"^https?://github\.com/[\w.-]+/[\w.-]+/?$"
+    return bool(re.match(pattern, url.rstrip("/")))
+
+
 class RepositoryAnalyzeView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -31,6 +38,13 @@ class RepositoryAnalyzeView(APIView):
         if not url:
             return Response(
                 {"error": "URL is required."}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        url = url.strip()
+        if not is_valid_github_url(url):
+            return Response(
+                {"error": "Invalid GitHub repository URL."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         with transaction.atomic():
