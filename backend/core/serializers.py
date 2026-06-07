@@ -122,3 +122,13 @@ class LearnerProfileSerializer(serializers.ModelSerializer):
         ]
 
         read_only_fields = ["user", "last_active"]
+
+
+class StructuredSkillsSerializer(serializers.Serializer):
+    skill = serializers.CharField(max_length=100)
+    band = serializers.ChoiceField(choices=["beginner", "intermediate", "advanced"])
+
+    def validate_skill(self, value):
+        if not value.strip():
+            raise serializers.ValidationError("Skill cannot be empty.")
+        return value.lower().strip()

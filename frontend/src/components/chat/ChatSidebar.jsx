@@ -56,12 +56,12 @@ export function ChatSidebar({
 
       <aside
         className={cn(
-          "flex flex-col border-r border-border/50 bg-card/40 backdrop-blur-sm transition-all duration-300 h-full",
+          "flex flex-col border-r border-gray-200 dark:border-gray-800 bg-card transition-all duration-300 h-full",
           expanded ? "w-64" : "w-14",
         )}
       >
         {/* Top: expand/collapse + New Chat button */}
-        <div className="flex items-center gap-2 p-2 border-b border-border/50">
+        <div className="flex items-center gap-2 p-2 border-b border-gray-200 dark:border-gray-800">
           <button
             onClick={() => setExpanded(!expanded)}
             className="p-2 rounded-lg hover:bg-violet-600/15 text-muted-foreground transition-colors"
@@ -77,7 +77,7 @@ export function ChatSidebar({
           {expanded && (
             <button
               onClick={onNewChat}
-              className="flex-1 text-xs font-medium bg-linear-to-r from-indigo-600 to-purple-600 text-white py-1.5 rounded-lg transition-opacity hover:opacity-90"
+              className="flex-1 text-xs font-medium bg-primary text-white py-1.5 rounded-lg transition-opacity hover:opacity-90"
             >
               + New Chat
             </button>
@@ -123,7 +123,7 @@ export function ChatSidebar({
         )}
 
         {/* Bottom: avatar + settings popover */}
-        <div className="p-2 border-t border-border/50">
+        <div className="p-2 border-t border-gray-200 dark:border-gray-800">
           <Popover.Root>
             <Popover.Trigger
               className={cn(
@@ -133,7 +133,7 @@ export function ChatSidebar({
               )}
               aria-label="User menu"
             >
-              <div className="h-8 w-8 rounded-full bg-linear-to-br from-indigo-600 to-purple-600 flex items-center justify-center text-white text-xs font-semibold shrink-0">
+              <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-white text-xs font-semibold shrink-0">
                 {initials}
               </div>
               {expanded && (
@@ -145,8 +145,8 @@ export function ChatSidebar({
 
             <Popover.Portal>
               <Popover.Positioner>
-                <Popover.Popup className="z-50 w-52 rounded-xl border border-border/60 bg-card p-2 shadow-xl backdrop-blur-md">
-                  <div className="px-2 py-1.5 text-xs text-muted-foreground truncate border-b border-border/50 mb-1">
+                <Popover.Popup className="z-50 w-52 rounded-xl border border-gray-200 dark:border-gray-800 bg-card p-2 shadow-xl">
+                  <div className="px-2 py-1.5 text-xs text-muted-foreground truncate border-b border-gray-200 dark:border-gray-800 mb-1">
                     {user?.email || "user@example.com"}
                   </div>
 

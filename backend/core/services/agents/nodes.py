@@ -12,10 +12,10 @@ import json
 import logging
 import re
 
-from core.models import Recommendation, Repository
+from core.models import Repository
+from core.services.skills import SkillExtractor
 from core.services.token_rotator import TokenRotator
 from django.conf import settings
-from django.contrib.auth.models import User
 from pydantic import SecretStr
 
 from ..graph_loader import load_engine_for_repo
@@ -107,25 +107,18 @@ def onboarding_node(state: AgentState) -> AgentState:
                 "conversation_phase": "onboarding",
             }
 
-        parsed_raw = llm_respond(
-            """
-            Based on this conversation, extract the user's skills and experience level.
-            Return ONLY valid JSON — a list like:
-            [{"skill": "python", "band": "intermediate"}]
-            Valid bands: beginner, intermediate, comfortable.
-            Return [] if unclear. Pure JSON only, no markdown.
-            """,
-            messages,
-        )
-        try:
-            clean = parsed_raw.replace("```json", "").replace("```", "").strip()
-            skills = json.loads(clean)
-            if not isinstance(skills, list):
-                skills = []
-        except (json.JSONDecodeError, ValueError):
-            skills = []
+        skill_extractor = SkillExtractor()
 
-        if skills:
+        last_user_msg = _last_user_message(messages)
+        extracted_skill_names = skill_extractor.extract(last_user_msg)
+
+        repo = Repository.objects.get(id=state["repo_id"])
+        repo_skills_set = set(repo.skills_found)
+
+        valid_skills = [s for s in extracted_skill_names if s in repo_skills_set]
+
+        if valid_skills:
+            skills = [{"skill": s, "band": "intermediate"} for s in valid_skills]
             reply = "Great! Let me find the best issues for you — one moment."
             return {
                 **state,
@@ -135,10 +128,7 @@ def onboarding_node(state: AgentState) -> AgentState:
             }
         else:
             reply = llm_respond(
-                """
-                The user's skills are still unclear. Ask a gentle follow-up to understand
-                their programming background and experience. ONE question only.
-                """,
+                "The user hasn't mentioned any clear skills from our skill list. Ask them to list specific technologies (e.g., 'React', 'JavaScript', 'Python'). ONE short question.",
                 messages,
             )
             return {
@@ -146,127 +136,41 @@ def onboarding_node(state: AgentState) -> AgentState:
                 "messages": _assistant(messages, reply),
                 "conversation_phase": "onboarding",
             }
-
     return {**state, "conversation_phase": "analysis"}
 
 
 def issue_analysis_node(state: AgentState) -> AgentState:
     messages = state.get("messages") or []
-    repo_id = state.get("repo_id")
-    skills: list[dict] = state.get("user_skills") or []
-    skill_names = [s["skill"] for s in skills]
+    _ = state.get("repo_id")
+    selected = state.get("selected_issue")
+    recommendations = state.get("recommendations")
 
-    if state.get("selected_issue"):
+    if selected:
         return {**state, "conversation_phase": "guidance"}
 
-    if not state.get("recommendations"):
-        try:
-            engine = load_engine_for_repo(repo_id)
-            raw_results = engine.recommend(skill_names, top_k=5)
-        except Exception as exc:
-            logger.warning("Engine not ready: %s", exc)
-            reply = "The repository is still being analyzed. Please wait a moment and try again."
-            return {
-                **state,
-                "messages": _assistant(messages, reply),
-                "conversation_phase": "analysis",
-            }
-
-        band = skills[0].get("band", "beginner") if skills else "beginner"
-        if band == "beginner":
-            raw_results = [r for r in raw_results if len(r.get("skills", [])) <= 4]
-
-        flagged = []
-        for r in raw_results:
-            try:
-                score = engine.graph.novelty_score("", r["id"])
-                r["novelty"] = round(score, 2)
-                r["already_tried"] = score < 0.5
-            except Exception:
-                r["novelty"] = 1.0
-                r["already_tried"] = False
-            flagged.append(r)
-
-        state = {**state, "recommendations": flagged}
-        repo = Repository.objects.get(id=repo_id)
-        user = User.objects.get(id=state["user_id"])
-        # Remove old recommendations for this user+repo (clean slate)
-        Recommendation.objects.filter(repository=repo, user=user).delete()
-
-        rec_objects = []
-        for rec in flagged:
-            rec_objects.append(
-                Recommendation(
-                    repository=repo,
-                    user=user,
-                    issue_id=str(rec["id"]),
-                    title=rec["title"],
-                    summary=rec.get("summary", ""),
-                    labels=rec.get("labels", []),
-                    skills=rec.get("skills", []),
-                    skills_matched=rec.get("skill_overlap", []),
-                    match_score=rec["match_score"],
-                    novelty_score=rec["novelty"],
-                    combined_score=rec["combined_score"],
-                )
-            )
-        Recommendation.objects.bulk_create(rec_objects)
-
-    recommendations = state.get("recommendations") or []
-
-    last = _last_user_message(messages)
-    if last and recommendations:
-        picked = (
-            llm_respond(
-                f"""
-            The user said: "{last}"
-            Available issues (JSON): {json.dumps(recommendations)}
-
-            Did the user clearly pick one of these issues?
-            If YES, reply with ONLY the issue's id number (integer).
-            If NO or ambiguous, reply with: none
-            """,
-                messages,
-            )
-            .strip()
-            .lower()
+    if not recommendations:
+        reply = (
+            "I'm waiting for the issue recommendations to be prepared. "
+            "Please try again in a moment."
         )
+        return {
+            **state,
+            "messages": _assistant(messages, reply),
+            "conversation_phase": "analysis",
+        }
 
-        if picked != "none":
-            selected = next(
-                (r for r in recommendations if str(r.get("id")) == picked), None
-            )
-            if selected:
-                return {
-                    **state,
-                    "messages": messages,
-                    "selected_issue": selected,
-                    "conversation_phase": "guidance",
-                }
+    if len(messages) == 0 or messages[-1].get("role") != "assistant":
+        reply = (
+            "I've found several issues that match your skills. "
+            "Please select one from the list above to continue."
+        )
+        return {
+            **state,
+            "messages": _assistant(messages, reply),
+            "conversation_phase": "analysis",
+        }
 
-    reply = llm_respond(
-        f"""
-        You are helping a developer pick a GitHub issue to work on.
-        Here are the top matching issues (JSON): {json.dumps(recommendations[:3])}
-
-        For each issue explain in plain, simple language:
-          - What the issue is asking for
-          - What skills are involved
-          - Rough complexity (simple / moderate / involved)
-          - If 'already_tried' is true, add a note: 'Note: a similar approach was attempted before.'
-
-        Present at most 3 issues. Number them clearly.
-        End by asking which one they would like to work on.
-        Do NOT write any code.
-        """,
-        messages,
-    )
-
-    return {
-        **state,
-        "messages": _assistant(messages, reply),
-        "conversation_phase": "analysis",
-    }
+    return {**state, "conversation_phase": "analysis"}
 
 
 def guidance_node(state: AgentState) -> AgentState:

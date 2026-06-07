@@ -19,6 +19,7 @@ from .serializers import (
     LearnerProfileSerializer,
     RecommendationSerializer,
     RepositorySerializer,
+    StructuredSkillsSerializer,
 )
 from .tasks import analyze_repository_task, run_chat_task
 
@@ -239,6 +240,7 @@ class SignupView(APIView):
     permission_classes = []
 
     def post(self, request):
+        print("Signup request data:", request.data)
         username = request.data.get("username")
         email = request.data.get("email")
         password = request.data.get("password")
@@ -306,3 +308,171 @@ class LogoutView(APIView):
         response.delete_cookie("access_token")
         response.delete_cookie("refresh_token")
         return response
+
+
+class StructuredSkillsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request, session_id):
+        session = get_object_or_404(
+            ConversationSession, id=session_id, user=request.user
+        )
+        skills_data = request.data.get("skills")
+        if not isinstance(skills_data, list):
+            return Response(
+                {"error": "skills must be a list of objects with 'skill' and 'band'"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        validated_skills = []
+        for item in skills_data:
+            serializer = StructuredSkillsSerializer(data=item)
+            if not serializer.is_valid():
+                return Response(
+                    {"error": f"Invalid skill entry: {serializer.errors}"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            validated_skills.append(serializer.validated_data)
+
+        current_state = session.state or {}
+        current_state["user_skills"] = validated_skills
+        session.state = current_state
+        session.save(update_fields=["state"])
+
+        return Response(
+            {
+                "status": "skills updated",
+                "user_skills": validated_skills,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class RecommendationView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, session_id):
+        """Get recommended issues based on user's selected skills."""
+        import os
+
+        from .services.learning_path import generate_learning_path
+        from .services.recommender import RecommendationEngine
+
+        session = get_object_or_404(
+            ConversationSession, id=session_id, user=request.user
+        )
+        repo = session.repository
+
+        # Get user skills from session state
+        user_skills = session.state.get("user_skills", [])
+        if (
+            isinstance(user_skills, list)
+            and user_skills
+            and isinstance(user_skills[0], dict)
+        ):
+            # Extract just the skill names from structured skills
+            user_skill_names = [s["skill"] for s in user_skills]
+        else:
+            user_skill_names = user_skills if isinstance(user_skills, list) else []
+
+        try:
+            # Load the recommendation engine with repo index
+            index_path = repo.index_path
+            if not index_path or not os.path.exists(index_path):
+                return Response(
+                    {
+                        "error": "Repository index not found. Please re-analyze the repository."
+                    },
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            engine = RecommendationEngine()
+            engine.load_index(index_path)
+
+            # If no user skills selected, use default skills from repo
+            if not user_skill_names:
+                user_skill_names = repo.skills_found[:3] if repo.skills_found else []
+
+            # Get recommendations
+            recommendations = (
+                engine.recommend(user_skill_names, top_k=5) if user_skill_names else []
+            )
+
+            if not recommendations:
+                # No matching issues - generate learning path
+                all_issues = engine.graph.issues.meta
+                learning_path = generate_learning_path(all_issues)
+                return Response(
+                    {
+                        "status": "no_match",
+                        "recommendations": [],
+                        "learning_path": learning_path,
+                        "message": learning_path,
+                    }
+                )
+
+            # Format recommendations for frontend
+            formatted_recs = []
+            for rec in recommendations:
+                formatted_recs.append(
+                    {
+                        "id": rec.get("id"),
+                        "title": rec.get("title", ""),
+                        "difficulty": rec.get("difficulty", "intermediate"),
+                        "skills": rec.get("skills", []),
+                        "labels": rec.get("labels", []),
+                        "combined_score": rec.get("combined_score", 0),
+                        "match_score": rec.get("match_score", 0),
+                        "summary": rec.get("summary", ""),
+                    }
+                )
+
+            return Response(
+                {
+                    "status": "success",
+                    "recommendations": formatted_recs,
+                    "count": len(formatted_recs),
+                }
+            )
+
+        except Exception as e:
+            import traceback
+
+            traceback.print_exc()
+            return Response(
+                {"error": f"Failed to fetch recommendations: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class SelectIssueView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request, session_id):
+        """Store selected issue in session state."""
+        session = get_object_or_404(
+            ConversationSession, id=session_id, user=request.user
+        )
+
+        issue_data = request.data.get("issue")
+        if not issue_data:
+            return Response(
+                {"error": "issue data is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        current_state = session.state or {}
+        current_state["selected_issue"] = issue_data
+        current_state["conversation_phase"] = "guidance"
+        session.state = current_state
+        session.phase = "guidance"
+        session.save(update_fields=["state", "phase"])
+
+        return Response(
+            {
+                "status": "issue_selected",
+                "issue": issue_data,
+                "phase": session.phase,
+            },
+            status=status.HTTP_200_OK,
+        )

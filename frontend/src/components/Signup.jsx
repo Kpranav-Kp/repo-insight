@@ -1,19 +1,23 @@
-//frontend/src/components/Signup.jsx
+// frontend/src/components/SignupPage.jsx
+// Signup page component - standalone page with grid background and blobs (visual appeal)
+// No Dialog wrapper - this is a full page component
 import { Mail, Lock, User, ArrowRight, Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
-export default function Signup({ onSignupSuccess, goToLogin }) {
+export default function SignupPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
   const handleSignup = async (e) => {
     e.preventDefault();
@@ -21,7 +25,7 @@ export default function Signup({ onSignupSuccess, goToLogin }) {
     setLoading(true);
 
     try {
-      const res = await fetch("http://localhost:8000/api/auth/signup/", {
+      const res = await fetch("/api/auth/signup/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, email, password }),
@@ -32,8 +36,29 @@ export default function Signup({ onSignupSuccess, goToLogin }) {
         setLoading(false);
         return;
       }
-      setLoading(false);
-      onSignupSuccess?.();
+
+      // Auto-login after signup
+      try {
+        const loginRes = await fetch("/api/auth/login/", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        });
+
+        if (loginRes.ok) {
+          const loginData = await loginRes.json();
+          localStorage.setItem("username", loginData.username);
+          localStorage.setItem("email", email);
+          setLoading(false);
+          navigate("/chat");
+        } else {
+          setLoading(false);
+          navigate("/login");
+        }
+      } catch (_err) {
+        setLoading(false);
+        navigate("/login");
+      }
     } catch (_err) {
       setError("Network error — is backend running?");
       setLoading(false);
@@ -42,13 +67,16 @@ export default function Signup({ onSignupSuccess, goToLogin }) {
 
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-background bg-grid flex items-center justify-center px-4 py-12">
+      {/* Animated gradient blobs - kept for visual appeal on public pages */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute -top-24 -left-24 h-96 w-96 rounded-full bg-primary/30 blur-3xl animate-blob" />
         <div className="absolute top-1/3 -right-24 h-96 w-96 rounded-full bg-primary/20 blur-3xl animate-blob animation-delay-2000" />
         <div className="absolute -bottom-24 left-1/3 h-96 w-96 rounded-full bg-violet-600/15 blur-3xl animate-blob animation-delay-4000" />
       </div>
 
+      {/* Card - glassmorphism kept for signup page visual appeal */}
       <Card className="relative z-10 w-full max-w-md border-border/60 bg-card/70 backdrop-blur-xl shadow-2xl shadow-primary/10 p-8 rounded-2xl">
+        {/* Glow border accent */}
         <div className="pointer-events-none absolute -inset-px rounded-2xl bg-linear-to-br from-primary/40 via-transparent to-fuchsia-500/30 opacity-60 p-px" />
 
         {/* Brand */}
@@ -171,13 +199,12 @@ export default function Signup({ onSignupSuccess, goToLogin }) {
 
         <p className="mt-6 text-center text-sm text-muted-foreground">
           Already have an account?{" "}
-          <button
-            type="button"
-            onClick={goToLogin}
-            className="text-primary hover:underline cursor-pointer bg-transparent border-none p-0 text-sm"
+          <Link
+            to="/login"
+            className="text-primary hover:underline font-medium"
           >
             Log in
-          </button>
+          </Link>
         </p>
       </Card>
     </div>

@@ -27,7 +27,7 @@ export default function ChatPage({ onLogout }) {
   };
 
   const handleLogout = async () => {
-    await fetch("http://localhost:8000/api/auth/logout/", {
+    await fetch("/api/auth/logout/", {
       method: "POST",
       credentials: "include",
     });
@@ -38,15 +38,6 @@ export default function ChatPage({ onLogout }) {
 
   return (
     <div className="relative h-screen bg-background text-foreground overflow-hidden">
-      {/* Background blobs */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 overflow-hidden"
-      >
-        <div className="absolute -left-24 top-0 h-105 w-105 rounded-full bg-violet-600/15 blur-3xl" />
-        <div className="absolute -right-24 bottom-0 h-105 w-105 rounded-full bg-indigo-600/15 blur-3xl" />
-      </div>
-
       <div className="relative flex h-full">
         <ChatSidebar
           user={user}

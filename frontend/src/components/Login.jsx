@@ -1,18 +1,22 @@
-//frontend/src/components/Login.jsx
+// frontend/src/components/LoginPage.jsx
+// Login page component - standalone page with grid background and blobs (visual appeal)
+// No Dialog wrapper - this is a full page component
 import { Mail, Lock, ArrowRight, Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
-export default function Login({ onLoginSuccess, _goToSignup }) {
+export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -20,7 +24,7 @@ export default function Login({ onLoginSuccess, _goToSignup }) {
     setLoading(true);
 
     try {
-      const res = await fetch("http://localhost:8000/api/auth/login/", {
+      const res = await fetch("/api/auth/login/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
@@ -36,7 +40,8 @@ export default function Login({ onLoginSuccess, _goToSignup }) {
       localStorage.setItem("username", data.username);
       localStorage.setItem("email", email);
       setLoading(false);
-      onLoginSuccess?.();
+      // Navigate to chat page after successful login
+      navigate("/chat");
     } catch (_err) {
       setError("Network error — is the backend running?");
       setLoading(false);
@@ -45,14 +50,14 @@ export default function Login({ onLoginSuccess, _goToSignup }) {
 
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-background bg-grid flex items-center justify-center px-4 py-12">
-      {/* Animated gradient blobs */}
+      {/* Animated gradient blobs - kept for visual appeal on public pages */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute -top-24 -left-24 h-96 w-96 rounded-full bg-primary/30 blur-3xl animate-blob" />
         <div className="absolute top-1/3 -right-24 h-96 w-96 rounded-full bg-primary/20 blur-3xl animate-blob animation-delay-2000" />
         <div className="absolute -bottom-24 left-1/3 h-96 w-96 rounded-full bg-violet-600/15 blur-3xl animate-blob animation-delay-4000" />
       </div>
 
-      {/* Card */}
+      {/* Card - glassmorphism kept for login page visual appeal */}
       <Card className="relative z-10 w-full max-w-md border-border/60 bg-card/70 backdrop-blur-xl shadow-2xl shadow-primary/10 p-8 rounded-2xl">
         {/* Glow border accent */}
         <div className="pointer-events-none absolute -inset-px rounded-2xl bg-linear-to-br from-primary/40 via-transparent to-fuchsia-500/30 opacity-60 [mask:linear-gradient(#000,#000)_content-box,linear-gradient(#000,#000)] mask:exclude p-px" />
@@ -77,7 +82,7 @@ export default function Login({ onLoginSuccess, _goToSignup }) {
         <h1 className="font-display text-3xl font-bold leading-tight">
           Log in to{" "}
           <span
-            className="bg-linear-to-r from-indigo-600 via-violet-600 to-purple-600 
+            className="bg-linear-to-r from-indigo-600 via-violet-600 to-purple-600
 dark:from-indigo-400 dark:via-violet-400 dark:to-purple-400 bg-clip-text text-transparent animate-gradient"
           >
             keep building.
@@ -169,11 +174,22 @@ dark:from-indigo-400 dark:via-violet-400 dark:to-purple-400 bg-clip-text text-tr
           </Button>
         </form>
 
-        {/* Terminal-like footer chip (matches dark screenshot) */}
+        {/* Terminal-like footer chip */}
         <div className="mt-6 rounded-md border border-border/70 bg-secondary/40 px-3 py-2 font-mono text-[11px] text-muted-foreground">
           <span className="text-primary">$</span> repoinsight auth --login
           <span className="ml-1 inline-block h-3 w-1.5 translate-y-0.5 bg-primary animate-pulse" />
         </div>
+
+        {/* Link to signup */}
+        <p className="mt-6 text-center text-sm text-muted-foreground">
+          Don&apos;t have an account?{" "}
+          <Link
+            to="/signup"
+            className="text-primary hover:underline font-medium"
+          >
+            Sign up
+          </Link>
+        </p>
       </Card>
     </div>
   );

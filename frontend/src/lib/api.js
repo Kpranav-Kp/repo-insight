@@ -1,23 +1,11 @@
-// Tiny API client for the Django backend.
-// Configure base URL via VITE_API_BASE_URL (defaults to http://localhost:8000).
-// Auth: JWT access token stored in localStorage under "access_token".
 // frontend/src/lib/api.js
-const BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
-
-export function getToken() {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem("access_token");
-}
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
 
 async function request(path, options = {}) {
-  const token = getToken();
   const headers = {
     "Content-Type": "application/json",
     ...(options.headers || {}),
   };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-
   const res = await fetch(`${BASE_URL}${path}`, {
     ...options,
     headers,
@@ -62,9 +50,26 @@ export const api = {
     }),
 
   chatResult: (taskId) => request(`/chat/result/${taskId}/`),
+
+  submitStructuredSkills: (sessionId, skills) =>
+    request(`/chat/session/${sessionId}/skills/structured/`, {
+      method: "PUT",
+      body: JSON.stringify({ skills }),
+    }),
+
+  // ✅ Added missing endpoint
+  getRecommendations: (sessionId) =>
+    request(`/chat/session/${sessionId}/recommendations/`, {
+      method: "GET",
+    }),
+
+  selectIssue: (sessionId, issue) =>
+    request(`/chat/session/${sessionId}/select-issue/`, {
+      method: "PUT",
+      body: JSON.stringify({ issue }),
+    }),
 };
 
-// Poll helper
 export async function poll(
   fn,
   done,

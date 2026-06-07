@@ -9,9 +9,12 @@ from .views import (
     LoginView,
     LogoutView,
     RecommendationFeedbackView,
+    RecommendationView,
     RepositoryAnalyzeView,
     RepositoryStatusView,
+    SelectIssueView,
     SignupView,
+    StructuredSkillsView,
     UpdateSessionSkillsView,
 )
 
@@ -47,4 +50,18 @@ urlpatterns = [
     path("auth/signup/", SignupView.as_view()),
     path("auth/login/", LoginView.as_view()),
     path("auth/logout/", LogoutView.as_view()),
+    path(
+        "chat/session/<int:session_id>/skills/structured/",
+        StructuredSkillsView.as_view(),
+    ),
+    path(
+        "chat/session/<int:session_id>/recommendations/",
+        RecommendationView.as_view(),
+        name="recommendations",
+    ),
+    path(
+        "chat/session/<int:session_id>/select-issue/",
+        SelectIssueView.as_view(),
+        name="select-issue",
+    ),
 ]

@@ -328,3 +328,37 @@ class SemanticGraph:
             "prs": len(self.prs),
             "edges": len(self.adj.edges),
         }
+
+    def get_issue_difficulty_score(self, issue_id: str) -> float:
+        """
+        Return score based on difficulty: beginner=1.0, intermediate=0.5, advanced=0.0
+        """
+        idx = self.issues.get_idx_by_id(issue_id)
+        if idx is None:
+            return 0.5
+        difficulty = self.issues.meta[idx].get("difficulty", "intermediate")
+        if difficulty == "beginner":
+            return 1.0
+        elif difficulty == "advanced":
+            return 0.0
+        else:
+            return 0.5
+
+    def get_issue_label_bonus(self, issue_id: str) -> float:
+        """
+        Compute bonus from labels: "good first issue" +0.2, "help wanted" +0.15, "documentation" +0.1
+        Maximum bonus capped at 0.3
+        """
+        idx = self.issues.get_idx_by_id(issue_id)
+        if idx is None:
+            return 0.0
+        labels = self.issues.meta[idx].get("labels", [])
+        label_lower = [label.lower() for label in labels]
+        bonus = 0.0
+        if "good first issue" in label_lower:
+            bonus += 0.2
+        if "help wanted" in label_lower:
+            bonus += 0.15
+        if "documentation" in label_lower:
+            bonus += 0.1
+        return min(bonus, 0.3)

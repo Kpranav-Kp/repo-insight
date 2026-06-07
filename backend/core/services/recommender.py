@@ -6,7 +6,7 @@ from django.conf import settings
 
 from .github import GitHubClient, GitHubError, RateLimitError
 from .semantic_graph import SemanticGraph
-from .skills import SkillExtractor
+from .skills import SkillExtractor, extract_issue_metadata
 
 
 class RecommendationEngine:
@@ -46,10 +46,10 @@ class RecommendationEngine:
         all_skills = set()
 
         for issue in issues:
-            text = f"{issue.title} {issue.body}"
-            skills = self.skill_extractor.extract(text)
+            metadata = extract_issue_metadata(issue.title, issue.body, issue.labels)
+            skills = metadata["skills"]
+            difficulty = metadata["difficulty"]
             all_skills.update(skills)
-
             self.graph.add_issue(
                 {
                     "id": str(issue.number),
@@ -58,6 +58,7 @@ class RecommendationEngine:
                     "skills": skills,
                     "labels": issue.labels,
                     "state": issue.state,
+                    "difficulty": difficulty,  # new field
                 }
             )
         for pr in prs:
@@ -94,46 +95,49 @@ class RecommendationEngine:
 
     def recommend(self, user_skills: list[str], top_k: int = 5) -> list[dict]:
         """
-        Given a list of user skills, return top-K skill-matched issues
-        enriched with novelty scores.
-
-        Raises RuntimeError if build_from_repository() has not been called.
+        Metadata-driven recommendation.
+        1. Use FAISS to retrieve top (top_k * 2) candidate issues.
+        2. Re-rank each candidate using:
+           final_score = 0.6 * skill_overlap + 0.2 * difficulty_score + 0.2 * label_bonus
+        3. Return top_k issues sorted by final_score.
         """
         if not self._is_built:
             raise RuntimeError("Graph not built. Call build_from_repository() first.")
 
-        raw_results = self.graph.skill_to_issue(user_skills, top_k=top_k * 2)
+        candidates = self.graph.skill_to_issue(user_skills, top_k=top_k * 2)
+
+        if not candidates:
+            return []
 
         user_skills_set = set(s.lower() for s in user_skills)
 
-        recommendations = []
-        for r in raw_results:
-            issue_skills = set(r.get("skills", []))
-            overlap = sorted(issue_skills & user_skills_set)
+        scored = []
+        for cand in candidates:
+            issue_id = cand["id"]
+            issue_skills = set(cand.get("skills", []))
+            if issue_skills:
+                skill_overlap = len(user_skills_set & issue_skills) / len(issue_skills)
+            else:
+                skill_overlap = 0.0
 
-            novelty = self.graph.novelty_score(
-                recommendation_text=r["title"],
-                issue_id=r["id"],
-            )
-            combined_score = round(0.7 * r["score"] + 0.3 * novelty, 4)
+            difficulty_score = self.graph.get_issue_difficulty_score(issue_id)
+            label_bonus = self.graph.get_issue_label_bonus(issue_id)
 
-            recommendations.append(
-                {
-                    "id": r["id"],
-                    "title": r["title"],
-                    "summary": r.get("summary", ""),
-                    "labels": r.get("labels", []),
-                    "skills": r.get("skills", []),
-                    "skill_overlap": overlap,
-                    "match_score": round(r["score"], 4),
-                    "novelty_score": novelty,
-                    "combined_score": combined_score,
-                }
+            final_score = (
+                0.6 * skill_overlap + 0.2 * difficulty_score + 0.2 * label_bonus
             )
 
-        # Sort by combined score descending
-        recommendations.sort(key=lambda x: x["combined_score"], reverse=True)
-        return recommendations[:top_k]
+            cand["skill_overlap"] = sorted(user_skills_set & issue_skills)
+            cand["match_score"] = round(skill_overlap, 4)
+            cand["difficulty_score"] = difficulty_score
+            cand["label_bonus"] = label_bonus
+            cand["combined_score"] = round(final_score, 4)
+
+            scored.append(cand)
+
+        # Sort by combined_score descending
+        scored.sort(key=lambda x: x["combined_score"], reverse=True)
+        return scored[:top_k]
 
     def check_duplicate(self, issue_text: str) -> tuple:
         """

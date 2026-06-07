@@ -120,3 +120,47 @@ class SkillExtractor:
     def add_skills(self, skills: list[str]):
         self.skills.update(s.lower() for s in skills)
         self._compile_patterns()
+
+
+def extract_issue_metadata(title: str, body: str, labels: list[str]) -> dict:
+    """
+    Extract skills and difficulty from an issue's title, body, and labels.
+    Returns a dict: {"skills": list[str], "difficulty": "beginner"|"intermediate"|"advanced"}
+    """
+    extractor = SkillExtractor()
+    text = f"{title} {body}"
+    skills = extractor.extract(text)
+
+    difficulty = "intermediate"
+
+    label_lower = [label.lower() for label in labels]
+    text_lower = text.lower()
+
+    beginner_labels = {"good first issue", "beginner", "easy", "help wanted"}
+    beginner_keywords = {
+        "typo",
+        "documentation",
+        "docs",
+        "example",
+        "sample",
+        "test",
+        "readme",
+    }
+
+    if any(label in label_lower for label in beginner_labels) or any(
+        kw in text_lower for kw in beginner_keywords
+    ):
+        difficulty = "beginner"
+
+    advanced_labels = {"breaking change", "core", "performance", "advanced", "compiler"}
+    advanced_keywords = {"architecture", "runtime", "compiler", "refactor", "memory"}
+
+    if any(label in label_lower for label in advanced_labels) or any(
+        kw in text_lower for kw in advanced_keywords
+    ):
+        difficulty = "advanced"
+
+    return {
+        "skills": skills,
+        "difficulty": difficulty,
+    }

@@ -1,8 +1,7 @@
 // frontend/src/components/LandingPage.jsx
 import { useRef, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 
-import Login from "@/components/Login";
-import Signup from "@/components/Signup";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,7 +12,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
+
 const TerminalTypewriter = ({ text, delay = 65, pause = 2200 }) => {
   const [displayed, setDisplayed] = useState("");
   const [phase, setPhase] = useState("typing");
@@ -444,10 +443,8 @@ const Features = [
   },
 ];
 
-const LandingPage = ({ onLoginSuccess }) => {
+const LandingPage = () => {
   const scrollContainerRef = useRef(null);
-  const [loginOpen, setLoginOpen] = useState(false);
-  const [signupOpen, setSignupOpen] = useState(false);
 
   useEffect(() => {
     const el = scrollContainerRef.current;
@@ -534,55 +531,18 @@ const LandingPage = ({ onLoginSuccess }) => {
           </nav>
 
           <div className="flex items-center gap-3">
-            {/*} <Button
-              variant="ghost"
-              size="sm"
-              className="hidden sm:inline-flex text-sm font-medium"
+            <Link
+              to="/login"
+              className="hidden sm:inline-flex items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
             >
               Log in
-            </Button>*/}
-
-            <Dialog open={loginOpen} onOpenChange={setLoginOpen}>
-              <DialogTrigger
-                onClick={() => setLoginOpen(true)}
-                className="hidden sm:inline-flex items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-              >
-                Log in
-              </DialogTrigger>
-
-              <DialogContent className="p-0 sm:max-w-md border-border/70 bg-transparent shadow-none">
-                <Login
-                  onLoginSuccess={() => {
-                    setLoginOpen(false); // close popup
-                    onLoginSuccess(); // go to chat
-                  }}
-                />
-              </DialogContent>
-            </Dialog>
-
-            <Dialog open={signupOpen} onOpenChange={setSignupOpen}>
-              <DialogTrigger
-                render={
-                  <button className="inline-flex items-center justify-center rounded-lg border border-transparent bg-primary text-primary-foreground text-sm font-semibold shadow-md shadow-primary/15 h-7 px-2.5">
-                    Sign up
-                  </button>
-                }
-                nativeButton={false}
-              />
-
-              <DialogContent className="p-0 sm:max-w-md border-border/70 bg-transparent shadow-none">
-                <Signup
-                  onSignupSuccess={() => {
-                    setSignupOpen(false);
-                    setLoginOpen(true);
-                  }}
-                  goToLogin={() => {
-                    setSignupOpen(false);
-                    setLoginOpen(true);
-                  }}
-                />
-              </DialogContent>
-            </Dialog>
+            </Link>
+            <Link
+              to="/signup"
+              className="inline-flex items-center justify-center rounded-lg border border-transparent bg-primary text-primary-foreground text-sm font-semibold shadow-md shadow-primary/15 h-7 px-2.5"
+            >
+              Sign up
+            </Link>
             <ThemeToggle />
           </div>
         </div>
@@ -754,6 +714,7 @@ const LandingPage = ({ onLoginSuccess }) => {
             </div>
           </div>
         </section>
+
         <section className="mb-16">
           <div className="relative rounded-4xl border border-border/40 bg-linear-to-r from-primary/5 via-violet-500/5 to-blue-500/5 backdrop-blur-sm p-10 md:p-20 text-center overflow-hidden">
             <div className="absolute inset-0 bg-linear-to-br from-primary/5 via-transparent to-blue-500/5" />
