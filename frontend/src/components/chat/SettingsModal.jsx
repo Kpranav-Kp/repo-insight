@@ -49,7 +49,7 @@ export function SettingsModal({ open, onOpenChange, user, onUsernameChange }) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-sm p-6 bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 shadow-xl">
+      <DialogContent className="sm:max-w-sm border-border bg-white dark:bg-card p-6 shadow-xl backdrop-blur-md">
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
           <DialogDescription>
@@ -68,18 +68,22 @@ export function SettingsModal({ open, onOpenChange, user, onUsernameChange }) {
             </div>
             <button
               onClick={toggleTheme}
-              className="relative inline-flex h-8 w-14 items-center rounded-full border border-gray-200 dark:border-gray-800 bg-card transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="relative inline-flex h-8 w-14 items-center rounded-full border border-border bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label={
                 theme === "dark" ? "Switch to light" : "Switch to dark"
               }
             >
               <span
-                className={`inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary text-white transform transition-transform ${theme === "dark" ? "translate-x-6" : "translate-x-1"}`}
+                className={`inline-flex h-6 w-6 items-center justify-center rounded-full transform transition-transform ${
+                  theme === "dark"
+                    ? "translate-x-6 bg-primary text-white"
+                    : "translate-x-1 bg-white text-gray-900 shadow-sm"
+                }`}
               >
                 {theme === "dark" ? (
                   <Moon className="h-3.5 w-3.5" />
                 ) : (
-                  <Sun className="h-3.5 w-3.5" />
+                  <Sun className="h-3.5 w-3.5 text-gray-900" />
                 )}
               </span>
             </button>

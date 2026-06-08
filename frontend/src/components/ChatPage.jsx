@@ -37,7 +37,7 @@ export default function ChatPage({ onLogout }) {
   };
 
   return (
-    <div className="relative h-screen bg-background text-foreground overflow-hidden">
+    <div className="relative h-screen bg-white dark:bg-background text-foreground overflow-hidden">
       <div className="relative flex h-full">
         <ChatSidebar
           user={user}
@@ -50,7 +50,7 @@ export default function ChatPage({ onLogout }) {
           }}
         />
 
-        <main className="flex-1 min-w-0">
+        <main className="flex-1 min-w-0 bg-white dark:bg-background">
           <CurrentSession key={chatKey} activeSession={activeSession} />
         </main>
       </div>

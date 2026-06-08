@@ -1,14 +1,13 @@
 // frontend/src/components/LoginPage.jsx
-// Login page component - standalone page with grid background and blobs (visual appeal)
-// No Dialog wrapper - this is a full page component
+// Login page component - split screen layout with SpacePanel and clean white form panel
 import { Mail, Lock, ArrowRight, Eye, EyeOff } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+
+import SpacePanel from "./SpacePanel";
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -17,6 +16,20 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
+  // Temporary light mode override
+  useEffect(() => {
+    const root = document.documentElement;
+    const hadDark = root.classList.contains("dark");
+    if (hadDark) {
+      root.classList.remove("dark");
+    }
+    return () => {
+      if (hadDark) {
+        root.classList.add("dark");
+      }
+    };
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -49,148 +62,133 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="relative min-h-screen w-full overflow-hidden bg-background bg-grid flex items-center justify-center px-4 py-12">
-      {/* Animated gradient blobs - kept for visual appeal on public pages */}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -top-24 -left-24 h-96 w-96 rounded-full bg-primary/30 blur-3xl animate-blob" />
-        <div className="absolute top-1/3 -right-24 h-96 w-96 rounded-full bg-primary/20 blur-3xl animate-blob animation-delay-2000" />
-        <div className="absolute -bottom-24 left-1/3 h-96 w-96 rounded-full bg-violet-600/15 blur-3xl animate-blob animation-delay-4000" />
+    <div className="min-h-screen w-full flex flex-col md:flex-row bg-white text-slate-900 font-sans">
+      {/* Left side: SpacePanel */}
+      <div className="hidden md:block md:w-1/2 relative overflow-hidden">
+        <SpacePanel />
       </div>
 
-      {/* Card - glassmorphism kept for login page visual appeal */}
-      <Card className="relative z-10 w-full max-w-md border-border/60 bg-card/70 backdrop-blur-xl shadow-2xl shadow-primary/10 p-8 rounded-2xl">
-        {/* Glow border accent */}
-        <div className="pointer-events-none absolute -inset-px rounded-2xl bg-linear-to-br from-primary/40 via-transparent to-fuchsia-500/30 opacity-60 [mask:linear-gradient(#000,#000)_content-box,linear-gradient(#000,#000)] mask:exclude p-px" />
-
-        {/* Brand */}
-        <div className="flex items-center gap-2 mb-6">
-          <div className="h-9 w-9 rounded-lg bg-linear-to-br from-primary to-violet-600 flex items-center justify-center font-bold text-primary-foreground shadow-lg shadow-primary/30">
-            R
-          </div>
-          <span className="font-display text-lg font-semibold tracking-tight">
-            RepoInsight
-          </span>
-        </div>
-
-        <Badge
-          variant="outline"
-          className="mb-4 font-mono text-[10px] tracking-widest uppercase border-primary/40 text-primary"
-        >
-          v1.0 · welcome back
-        </Badge>
-
-        <h1 className="font-display text-3xl font-bold leading-tight">
-          Log in to{" "}
-          <span
-            className="bg-linear-to-r from-indigo-600 via-violet-600 to-purple-600
-dark:from-indigo-400 dark:via-violet-400 dark:to-purple-400 bg-clip-text text-transparent animate-gradient"
-          >
-            keep building.
-          </span>
-        </h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Continue your open-source journey — your skill graph is waiting.
-        </p>
-
-        {/* Divider */}
-        <div className="my-6 flex items-center gap-3">
-          <div className="h-px flex-1 bg-border" />
-          <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-            login with email
-          </span>
-          <div className="h-px flex-1 bg-border" />
-        </div>
-
-        {/* Form */}
-        <form className="space-y-4" onSubmit={handleSubmit}>
-          <div className="space-y-1.5">
-            <label
-              htmlFor="login-email"
-              className="text-xs font-medium text-muted-foreground"
-            >
-              Email
-            </label>
-            <div className="relative">
-              <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                type="text"
-                placeholder="you@repo.dev"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="pl-9 bg-secondary/40 border-border/70 focus-visible:ring-primary/60"
-              />
+      {/* Right side: Form Panel */}
+      <div className="w-full md:w-1/2 flex items-center justify-center p-8 md:p-16 bg-white text-slate-900">
+        <div className="w-full max-w-md space-y-6">
+          {/* Brand */}
+          <div className="flex items-center gap-2 mb-2">
+            <div className="h-9 w-9 rounded-lg bg-linear-to-br from-indigo-600 to-violet-600 flex items-center justify-center font-bold text-white shadow-md">
+              R
             </div>
+            <span className="font-display text-lg font-bold tracking-tight text-slate-900">
+              RepoInsight
+            </span>
           </div>
 
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <h1 className="font-display text-3xl font-bold leading-tight text-slate-900">
+              Log in to{" "}
+              <span className="bg-linear-to-r from-indigo-600 via-violet-600 to-purple-600 bg-clip-text text-transparent animate-gradient">
+                keep building.
+              </span>
+            </h1>
+            <p className="text-sm text-slate-500">
+              Continue your open-source journey — your skill graph is waiting.
+            </p>
+          </div>
+
+          {/* Divider */}
+          <div className="my-4 flex items-center gap-3">
+            <div className="h-px flex-1 bg-slate-200" />
+            <span className="font-mono text-[10px] uppercase tracking-widest text-slate-400">
+              login with email
+            </span>
+            <div className="h-px flex-1 bg-slate-200" />
+          </div>
+
+          {/* Form */}
+          <form className="space-y-4" onSubmit={handleSubmit}>
+            <div className="space-y-1.5">
               <label
-                htmlFor="login-password"
-                className="text-xs font-medium text-muted-foreground"
+                htmlFor="login-email"
+                className="text-xs font-semibold text-slate-600"
               >
-                Password
+                Email
               </label>
-              <button
-                type="button"
-                className="text-xs text-primary hover:underline bg-transparent border-none cursor-pointer"
-              >
-                Forgot?
-              </button>
+              <div className="relative">
+                <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Input
+                  type="text"
+                  placeholder="you@repo.dev"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="pl-9 bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400 focus-visible:border-violet-600 focus-visible:ring-violet-600/20"
+                />
+              </div>
             </div>
-            <div className="relative">
-              <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                type={showPassword ? "text" : "password"}
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="pl-9 pr-9 bg-secondary/40 border-border/70 focus-visible:ring-primary/60"
-              />
 
-              <button
-                type="button"
-                onClick={() => setShowPassword((s) => !s)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
-                {showPassword ? (
-                  <EyeOff className="h-4 w-4" />
-                ) : (
-                  <Eye className="h-4 w-4" />
-                )}
-              </button>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label
+                  htmlFor="login-password"
+                  className="text-xs font-semibold text-slate-600"
+                >
+                  Password
+                </label>
+                <button
+                  type="button"
+                  className="text-xs font-semibold text-violet-600 hover:text-violet-700 hover:underline bg-transparent border-none cursor-pointer"
+                >
+                  Forgot?
+                </button>
+              </div>
+              <div className="relative">
+                <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="pl-9 pr-9 bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400 focus-visible:border-violet-600 focus-visible:ring-violet-600/20"
+                />
+
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((s) => !s)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
             </div>
-          </div>
-          {error && <p className="text-sm text-red-400 mb-2">{error}</p>}
+            {error && (
+              <p className="text-sm text-red-500 mb-2 font-medium">{error}</p>
+            )}
 
-          <Button
-            type="submit"
-            disabled={loading}
-            className="group w-full bg-linear-to-r from-indigo-600 via-violet-600 to-purple-600 text-primary-foreground hover:opacity-95 shadow-lg shadow-primary/30 transition"
-          >
-            {loading ? "Logging in..." : "Log in"}
-            <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-          </Button>
-        </form>
+            <Button
+              type="submit"
+              disabled={loading}
+              className="group w-full bg-linear-to-r from-indigo-600 via-violet-600 to-purple-600 text-white hover:opacity-95 shadow-md shadow-violet-500/20 transition cursor-pointer"
+            >
+              {loading ? "Logging in..." : "Log in"}
+              <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+            </Button>
+          </form>
 
-        {/* Terminal-like footer chip */}
-        <div className="mt-6 rounded-md border border-border/70 bg-secondary/40 px-3 py-2 font-mono text-[11px] text-muted-foreground">
-          <span className="text-primary">$</span> repoinsight auth --login
-          <span className="ml-1 inline-block h-3 w-1.5 translate-y-0.5 bg-primary animate-pulse" />
+          {/* Link to signup */}
+          <p className="text-center text-sm text-slate-600">
+            Don&apos;t have an account?{" "}
+            <Link
+              to="/signup"
+              className="text-violet-600 hover:text-violet-700 font-semibold hover:underline"
+            >
+              Sign up
+            </Link>
+          </p>
         </div>
-
-        {/* Link to signup */}
-        <p className="mt-6 text-center text-sm text-muted-foreground">
-          Don&apos;t have an account?{" "}
-          <Link
-            to="/signup"
-            className="text-primary hover:underline font-medium"
-          >
-            Sign up
-          </Link>
-        </p>
-      </Card>
+      </div>
     </div>
   );
 }

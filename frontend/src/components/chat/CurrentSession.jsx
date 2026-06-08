@@ -1,5 +1,5 @@
 // frontend/src/components/chat/CurrentSession.jsx
-import { Send, Loader2, Check, Copy } from "lucide-react";
+import { Send, Loader2, Check, Copy, ThumbsUp, ThumbsDown } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
@@ -30,7 +30,10 @@ export function CurrentSession({ activeSession }) {
   const [error, setError] = useState(null);
   const [repoSkills, setRepoSkills] = useState([]);
   const [selectedSkills, setSelectedSkills] = useState([]);
-  const [recommendations, setRecommendations] = useState([]);
+  const [selectedIssueId, setSelectedIssueId] = useState(
+    activeSession?.selectedIssueId || null,
+  );
+  const [_, setRecommendations] = useState([]);
   const localIdRef = useRef(activeSession?.localId ?? newLocalId());
   const scrollRef = useRef(null);
   const textareaRef = useRef(null);
@@ -51,9 +54,10 @@ export function CurrentSession({ activeSession }) {
       sessionId,
       phase,
       messages,
+      selectedIssueId,
       updatedAt: Date.now(),
     });
-  }, [repoUrl, repoLabel, sessionId, phase, messages]);
+  }, [repoUrl, repoLabel, sessionId, phase, messages, selectedIssueId]);
 
   const repoNameFromUrl = (url) =>
     url.replace(/\.git$/, "").replace(/^https?:\/\/github\.com\//, "");
@@ -90,10 +94,9 @@ export function CurrentSession({ activeSession }) {
       const session = await api.createSession(repoId);
       setSessionId(session.id);
       setRepoSkills(repo.skills_found || []);
-      setStage("skills"); // ✅ move to skill selection (not overwritten later)
+      setStage("skills");
       setPhase(session.phase || "onboarding");
 
-      // Remove the pending analysis message and add a neutral "analysis complete" message
       setMessages((m) => {
         const copy = [...m];
         if (copy[copy.length - 1]?.pending) copy.pop();
@@ -116,15 +119,12 @@ export function CurrentSession({ activeSession }) {
     }
   };
 
-  // Submit structured skills and fetch recommendations
   const submitSkillsAndGetRecommendations = async () => {
     if (selectedSkills.length === 0) return;
     setStage("thinking");
     setError(null);
     try {
-      // 1. Save skills to session
       await api.submitStructuredSkills(sessionId, selectedSkills);
-      // 2. Fetch recommendations from backend (deterministic ranking)
       const recs = await api.getRecommendations(sessionId);
 
       if (recs.recommendations && recs.recommendations.length > 0) {
@@ -134,10 +134,10 @@ export function CurrentSession({ activeSession }) {
           {
             role: "ai",
             content: `Great! I found ${recs.recommendations.length} issues that match your skills. Select one to start working.`,
+            recommendations: recs.recommendations,
           },
         ]);
       } else if (recs.learning_path) {
-        // No matching issues - show learning path
         setRecommendations([]);
         setMessages((prev) => [
           ...prev,
@@ -153,25 +153,21 @@ export function CurrentSession({ activeSession }) {
     }
   };
 
-  // User selects an issue from the card
   const selectIssue = async (issue) => {
     setError(null);
     try {
-      // Store selected issue in backend
       await api.selectIssue(sessionId, issue);
+      setSelectedIssueId(issue.id);
       setStage("thinking");
 
-      // Add user message and get agent response
       const userMessage = `I'll work on issue #${issue.id}: ${issue.title}`;
       setMessages((prev) => [...prev, { role: "user", content: userMessage }]);
 
-      // Send message to trigger guidance phase
       const accepted = await api.sendMessage(
         sessionId,
         "Let's start working on this issue.",
       );
 
-      // Poll for agent response
       const result = await poll(
         () => api.chatResult(accepted.task_id),
         (r) => r.status === "done",
@@ -255,8 +251,8 @@ export function CurrentSession({ activeSession }) {
     if (textareaRef.current) textareaRef.current.style.height = "40px";
     if (stage === "idle") startRepo(text);
     else if (stage === "ready") sendChat(text);
-    // Other stages (skills, recommendations) have their own buttons, not the main input.
   };
+
   const getDifficultyClass = (difficulty) => {
     if (difficulty === "beginner") {
       return "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300";
@@ -266,6 +262,30 @@ export function CurrentSession({ activeSession }) {
     }
     return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300";
   };
+
+  // Helper functions to replace nested ternaries in button logic
+  const getButtonDisabledState = (isThisSelected, hasAnySelected) => {
+    if (isThisSelected) return true;
+    if (hasAnySelected) return true;
+    return false;
+  };
+
+  const getButtonClassName = (isThisSelected, hasAnySelected) => {
+    if (isThisSelected) {
+      return "w-full py-2 text-xs font-semibold rounded-lg transition-all bg-green-600 text-white cursor-default";
+    }
+    if (hasAnySelected) {
+      return "w-full py-2 text-xs font-semibold rounded-lg transition-all bg-gray-50 text-gray-400 dark:bg-zinc-800/60 dark:text-zinc-600 cursor-not-allowed border border-dashed border-gray-200 dark:border-zinc-700";
+    }
+    return "w-full py-2 text-xs font-semibold rounded-lg transition-all bg-violet-600 text-white hover:bg-violet-700 shadow-xs cursor-pointer";
+  };
+
+  const getButtonText = (isThisSelected, hasAnySelected) => {
+    if (isThisSelected) return "Selected";
+    if (hasAnySelected) return "Unavailable";
+    return "Select This Issue";
+  };
+
   const busy = stage === "analyzing" || stage === "thinking";
   const isInitial = stage === "idle" && messages.length <= 1;
   let placeholderText = "Type a message...";
@@ -328,7 +348,7 @@ export function CurrentSession({ activeSession }) {
     return (
       <div className="flex h-full flex-col">
         <div className="flex-1 overflow-y-auto p-6">
-          <div className="max-w-2xl mx-auto bg-card rounded-xl border border-gray-200 dark:border-gray-800 p-6 space-y-6">
+          <div className="max-w-2xl mx-auto bg-card rounded-xl border border-gray-200 dark:border-gray-850 p-6 space-y-6">
             <h3 className="text-xl font-display font-bold">Your Skills</h3>
             <p className="text-sm text-muted-foreground">
               Select the skills you have and your proficiency level.
@@ -361,12 +381,12 @@ export function CurrentSession({ activeSession }) {
                             ]);
                           }
                         }}
-                        className={`px-3 py-1 text-xs rounded-full border transition-colors ${
+                        className={`px-3 py-1 text-xs rounded-full border font-medium transition-all cursor-pointer ${
                           selectedSkills.some(
                             (s) => s.skill === skill && s.band === band,
                           )
-                            ? "bg-primary text-primary-foreground border-primary"
-                            : "bg-background text-foreground border-gray-300 dark:border-gray-700 hover:bg-secondary"
+                            ? "bg-violet-600 text-white border-violet-600 shadow-xs scale-105"
+                            : "bg-background text-foreground border-gray-300 dark:border-zinc-700 hover:bg-secondary"
                         }`}
                       >
                         {band.charAt(0).toUpperCase() + band.slice(1)}
@@ -379,83 +399,11 @@ export function CurrentSession({ activeSession }) {
             <button
               onClick={submitSkillsAndGetRecommendations}
               disabled={selectedSkills.length === 0}
-              className="w-full py-2 bg-primary text-primary-foreground rounded-lg disabled:opacity-50"
+              className="w-full py-2 bg-violet-600 text-white font-medium hover:bg-violet-700 rounded-lg disabled:opacity-50 shadow-xs cursor-pointer"
             >
               Continue
             </button>
           </div>
-        </div>
-        {InputArea}
-      </div>
-    );
-  }
-
-  // Render recommendation cards
-  if (stage === "recommendations") {
-    return (
-      <div className="flex h-full flex-col">
-        <div className="flex-1 overflow-y-auto px-6 py-6 space-y-5">
-          {/* Messages area showing learning path if no issues match */}
-          {messages.map((msg, i) => (
-            <MessageBubble key={i} msg={msg} />
-          ))}
-
-          {/* Issues grid - only shown if recommendations exist */}
-          {recommendations.length > 0 && (
-            <div>
-              <h3 className="text-xl font-display font-bold mb-4">
-                Recommended Issues
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {recommendations.map((issue) => (
-                  <div
-                    key={issue.id}
-                    className="bg-card border border-gray-200 dark:border-gray-800 rounded-xl p-4 space-y-3"
-                  >
-                    <div className="flex justify-between items-start">
-                      <h4 className="font-semibold text-base">{issue.title}</h4>
-                      <span
-                        className={`text-xs px-2 py-0.5 rounded-full ${getDifficultyClass(issue.difficulty)}`}
-                      >
-                        {issue.difficulty}
-                      </span>
-                    </div>
-                    <div className="flex flex-wrap gap-1">
-                      {issue.skills?.slice(0, 3).map((skill) => (
-                        <span
-                          key={skill}
-                          className="text-xs bg-secondary px-2 py-0.5 rounded-full"
-                        >
-                          {skill}
-                        </span>
-                      ))}
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      Match: {Math.round((issue.combined_score || 0) * 100)}%
-                    </div>
-                    {issue.labels && issue.labels.length > 0 && (
-                      <div className="flex flex-wrap gap-1">
-                        {issue.labels.slice(0, 2).map((label) => (
-                          <span
-                            key={label}
-                            className="text-xs text-primary border border-primary/30 px-2 py-0.5 rounded-full"
-                          >
-                            {label}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    <button
-                      onClick={() => selectIssue(issue)}
-                      className="w-full py-2 bg-primary text-primary-foreground rounded-lg"
-                    >
-                      Select This Issue
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
         {InputArea}
       </div>
@@ -478,11 +426,11 @@ export function CurrentSession({ activeSession }) {
     );
   }
 
-  // Normal chat mode (after issue selected, regular conversation)
+  // Normal chat mode (after issue selected, regular conversation or inline recommendations)
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col bg-background">
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-3 border-b border-gray-200 dark:border-gray-800 bg-background">
+      <div className="flex items-center justify-between px-6 py-3 border-b border-gray-200 dark:border-zinc-800 bg-background">
         <div className="flex items-center gap-3">
           <span className="font-semibold text-foreground">
             {repoLabel || "No repo selected"}
@@ -510,7 +458,16 @@ export function CurrentSession({ activeSession }) {
         className="flex-1 overflow-y-auto px-6 py-6 space-y-5"
       >
         {messages.map((msg, i) => (
-          <MessageBubble key={i} msg={msg} />
+          <MessageBubble
+            key={i}
+            msg={msg}
+            selectedIssueId={selectedIssueId}
+            onSelectIssue={selectIssue}
+            getButtonDisabledState={getButtonDisabledState}
+            getButtonClassName={getButtonClassName}
+            getButtonText={getButtonText}
+            getDifficultyClass={getDifficultyClass}
+          />
         ))}
       </div>
 
@@ -520,64 +477,200 @@ export function CurrentSession({ activeSession }) {
   );
 }
 
-// Copy-button enabled message bubble (unchanged from original but moved outside)
-function MessageBubble({ msg }) {
+// Message bubble component with helper functions passed as props
+function MessageBubble({
+  msg,
+  selectedIssueId,
+  onSelectIssue,
+  getButtonDisabledState,
+  getButtonClassName,
+  getButtonText,
+  getDifficultyClass,
+}) {
   const isUser = msg.role === "user";
   const [copied, setCopied] = useState(false);
+  const [feedback, setFeedback] = useState(null); // 'good' | 'bad' | null
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(msg.content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleFeedback = (type) => {
+    setFeedback(type);
+  };
+
   return (
-    <div className={cn("flex", isUser ? "justify-end" : "justify-start")}>
+    <div
+      className={cn("flex w-full", isUser ? "justify-end" : "justify-start")}
+    >
       <div
         className={cn(
-          "max-w-[78%] rounded-2xl px-4 py-3 text-sm leading-relaxed",
+          "max-w-[85%] leading-relaxed",
           isUser
-            ? "bg-primary text-white shadow-md"
-            : "bg-gray-100 dark:bg-gray-800 text-foreground ring-1 ring-gray-200 dark:ring-gray-700",
+            ? "bg-gray-100 dark:bg-zinc-800 text-black dark:text-gray-100 rounded-2xl px-4 py-3 shadow-xs border border-gray-200 dark:border-zinc-700"
+            : "bg-transparent text-foreground w-full py-2 border-none ring-0 shadow-none",
         )}
       >
         {isUser ? (
-          <span>{msg.content}</span>
+          <span className="whitespace-pre-wrap text-sm">{msg.content}</span>
         ) : (
-          <div className="prose prose-sm dark:prose-invert max-w-none break-words">
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              rehypePlugins={[rehypeHighlight]}
-              components={{
-                code({ _, inline, className, children, ...props }) {
-                  const match = /language-(\w+)/.exec(className || "");
-                  if (!inline && match) {
-                    const codeString = String(children).replace(/\n$/, "");
+          <div className="w-full">
+            <div className="prose prose-sm max-w-none break-words">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                rehypePlugins={[rehypeHighlight]}
+                components={{
+                  code({ _, inline, className, children, ...props }) {
+                    const match = /language-(\w+)/.exec(className || "");
+                    if (!inline && match) {
+                      const codeString = String(children).replace(/\n$/, "");
+                      return (
+                        <div className="relative group my-2">
+                          <pre className={className} {...props}>
+                            <code className={match[1]}>{children}</code>
+                          </pre>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(codeString);
+                              setCopied(true);
+                              setTimeout(() => setCopied(false), 2000);
+                            }}
+                            className="absolute top-2 right-2 p-1 rounded bg-gray-800 text-gray-300 hover:text-white opacity-0 group-hover:opacity-100 transition cursor-pointer"
+                          >
+                            {copied ? <Check size={14} /> : <Copy size={14} />}
+                          </button>
+                        </div>
+                      );
+                    }
                     return (
-                      <div className="relative group">
-                        <pre className={className} {...props}>
-                          <code className={match[1]}>{children}</code>
-                        </pre>
+                      <code className={className} {...props}>
+                        {children}
+                      </code>
+                    );
+                  },
+                }}
+              >
+                {msg.content}
+              </ReactMarkdown>
+            </div>
+
+            {/* Render inline recommendations if present */}
+            {msg.recommendations && msg.recommendations.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-gray-200 dark:border-zinc-800">
+                <h4 className="font-display font-semibold text-sm mb-3">
+                  Recommended Issues:
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {msg.recommendations.map((issue) => {
+                    const isThisSelected = selectedIssueId === issue.id;
+                    const hasAnySelected = selectedIssueId !== null;
+                    return (
+                      <div
+                        key={issue.id}
+                        className={cn(
+                          "bg-card border rounded-xl p-4 space-y-3 transition-all",
+                          isThisSelected
+                            ? "border-violet-500 ring-2 ring-violet-500/20"
+                            : "border-gray-200 dark:border-zinc-800",
+                        )}
+                      >
+                        <div className="flex justify-between items-start gap-2">
+                          <h5 className="font-semibold text-sm leading-snug text-foreground line-clamp-2">
+                            {issue.title}
+                          </h5>
+                          <span
+                            className={cn(
+                              "text-[10px] px-2 py-0.5 rounded-full font-medium shrink-0 uppercase tracking-wider",
+                              getDifficultyClass(issue.difficulty),
+                            )}
+                          >
+                            {issue.difficulty}
+                          </span>
+                        </div>
+
+                        {issue.summary && (
+                          <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">
+                            {issue.summary}
+                          </p>
+                        )}
+
+                        <div className="flex flex-wrap gap-1">
+                          {issue.skills?.slice(0, 3).map((skill) => (
+                            <span
+                              key={skill}
+                              className="text-[10px] bg-secondary text-secondary-foreground px-2 py-0.5 rounded-full font-medium"
+                            >
+                              {skill}
+                            </span>
+                          ))}
+                        </div>
+
                         <button
-                          onClick={() => {
-                            navigator.clipboard.writeText(codeString);
-                            setCopied(true);
-                            setTimeout(() => setCopied(false), 2000);
-                          }}
-                          className="absolute top-2 right-2 p-1 rounded bg-gray-800 opacity-0 group-hover:opacity-100 transition"
+                          disabled={getButtonDisabledState(
+                            isThisSelected,
+                            hasAnySelected,
+                          )}
+                          onClick={() => onSelectIssue(issue)}
+                          className={getButtonClassName(
+                            isThisSelected,
+                            hasAnySelected,
+                          )}
                         >
-                          {copied ? <Check size={14} /> : <Copy size={14} />}
+                          {getButtonText(isThisSelected, hasAnySelected)}
                         </button>
                       </div>
                     );
-                  }
-                  return (
-                    <code className={className} {...props}>
-                      {children}
-                    </code>
-                  );
-                },
-              }}
-            >
-              {msg.content}
-            </ReactMarkdown>
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Action buttons (Copy / Good / Bad) */}
+            {!msg.pending && msg.content && (
+              <div className="flex items-center gap-2 mt-3 text-xs text-muted-foreground">
+                <button
+                  onClick={handleCopy}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-gray-200 dark:border-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-800/50 hover:text-foreground transition-colors cursor-pointer"
+                >
+                  {copied ? (
+                    <Check className="h-3.5 w-3.5" />
+                  ) : (
+                    <Copy className="h-3.5 w-3.5" />
+                  )}
+                  <span>{copied ? "Copied" : "Copy"}</span>
+                </button>
+                <button
+                  onClick={() => handleFeedback("good")}
+                  className={cn(
+                    "flex items-center gap-1.5 px-2.5 py-1 rounded-lg border transition-colors cursor-pointer",
+                    feedback === "good"
+                      ? "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800 text-green-600 dark:text-green-400 font-medium"
+                      : "border-gray-200 dark:border-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-800/50 hover:text-foreground",
+                  )}
+                >
+                  <ThumbsUp className="h-3.5 w-3.5" />
+                  <span>Good</span>
+                </button>
+                <button
+                  onClick={() => handleFeedback("bad")}
+                  className={cn(
+                    "flex items-center gap-1.5 px-2.5 py-1 rounded-lg border transition-colors cursor-pointer",
+                    feedback === "bad"
+                      ? "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 font-medium"
+                      : "border-gray-200 dark:border-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-800/50 hover:text-foreground",
+                  )}
+                >
+                  <ThumbsDown className="h-3.5 w-3.5" />
+                  <span>Bad</span>
+                </button>
+              </div>
+            )}
           </div>
         )}
         {msg.pending && (
-          <span className="ml-1 inline-flex gap-1">
+          <span className="ml-1 inline-flex gap-1 mt-2">
             <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" />
             <span
               className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce"

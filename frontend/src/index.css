@@ -24,20 +24,20 @@
   }
 
   .dark {
-    --background: 240 6% 6%;
+    --background: 240 5% 11%;
     --foreground: 220 15% 85%;
     --primary: 263 80% 68%;
     --primary-foreground: 240 6% 6%;
-    --border: 240 5% 18%;
+    --border: 240 5% 20%;
     --ring: 263 80% 68%;
-    --secondary: 240 5% 14%;
+    --secondary: 240 5% 16%;
     --secondary-foreground: 220 15% 85%;
-    --muted: 240 5% 14%;
+    --muted: 240 5% 16%;
     --muted-foreground: 220 10% 55%;
-    --card: 240 5% 10%;
+    --card: 240 5% 14%;
     --card-foreground: 220 15% 85%;
     --grid-color: rgba(255, 255, 255, 0.06);
-    --popover: 240 5% 10%;
+    --popover: 240 5% 14%;
     --popover-foreground: 220 15% 85%;
     color-scheme: dark;
   }
@@ -161,3 +161,62 @@
     linear-gradient(to bottom, var(--grid-color) 1px, transparent 1px);
   background-size: 36px 36px;
 }
+
+/* ─── Markdown Prose Styling ─── */
+.prose {
+  color: hsl(var(--foreground));
+  line-height: 1.625;
+}
+.prose h1, .prose h2, .prose h3, .prose h4 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  color: hsl(var(--foreground));
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+.prose h1 { font-size: 1.5rem; }
+.prose h2 { font-size: 1.25rem; border-b: 1px solid hsl(var(--border)); padding-bottom: 0.25rem; }
+.prose h3 { font-size: 1.125rem; }
+.prose p {
+  margin-top: 0;
+  margin-bottom: 1rem;
+}
+.prose ul, .prose ol {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  padding-left: 1.5rem;
+}
+.prose ul {
+  list-style-type: disc;
+}
+.prose ol {
+  list-style-type: decimal;
+}
+.prose li {
+  margin-top: 0.25rem;
+  margin-bottom: 0.25rem;
+}
+.prose code {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  background-color: hsl(var(--secondary));
+  padding: 0.125rem 0.25rem;
+  border-radius: var(--radius-sm);
+  color: hsl(var(--foreground));
+}
+.prose pre {
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+  padding: 1rem;
+  border-radius: var(--radius-md);
+  overflow-x: auto;
+  background-color: #0f141c; /* dark editor background */
+  border: 1px solid hsl(var(--border));
+}
+.prose pre code {
+  background-color: transparent;
+  padding: 0;
+  border-radius: 0;
+  color: #e2e8f0;
+}
+
