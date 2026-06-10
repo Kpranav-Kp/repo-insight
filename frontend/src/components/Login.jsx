@@ -1,190 +1,150 @@
-// frontend/src/components/LoginPage.jsx
-// Login page component - split screen layout with SpacePanel and clean white form panel
-import { Mail, Lock, ArrowRight, Eye, EyeOff } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { useTheme } from "@/components/ThemeToggle";
 
 import SpacePanel from "./SpacePanel";
 
-export default function LoginPage() {
-  const [showPassword, setShowPassword] = useState(false);
+export default function Login() {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const navigate = useNavigate();
 
-  // Temporary light mode override
-  useEffect(() => {
-    const root = document.documentElement;
-    const hadDark = root.classList.contains("dark");
-    if (hadDark) {
-      root.classList.remove("dark");
-    }
-    return () => {
-      if (hadDark) {
-        root.classList.add("dark");
-      }
-    };
-  }, []);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-
-    try {
-      const res = await fetch("/api/auth/login/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-
-      if (!res.ok) {
-        setError("Invalid email or password");
-        setLoading(false);
-        return;
-      }
-
-      const data = await res.json();
-      localStorage.setItem("username", data.username);
-      localStorage.setItem("email", email);
-      setLoading(false);
-      // Navigate to chat page after successful login
-      navigate("/chat");
-    } catch (_err) {
-      setError("Network error — is the backend running?");
-      setLoading(false);
-    }
-  };
-
   return (
-    <div className="min-h-screen w-full flex flex-col md:flex-row bg-white text-slate-900 font-sans">
-      {/* Left side: SpacePanel */}
-      <div className="hidden md:block md:w-1/2 relative overflow-hidden">
+    <div
+      className={`min-h-screen flex flex-col md:flex-row ${isDark ? "bg-[#000000]" : "bg-[#FFFFFF]"}`}
+    >
+      <div className="hidden md:block md:w-1/2 h-screen sticky top-0">
         <SpacePanel />
       </div>
 
-      {/* Right side: Form Panel */}
-      <div className="w-full md:w-1/2 flex items-center justify-center p-8 md:p-16 bg-white text-slate-900">
-        <div className="w-full max-w-md space-y-6">
-          {/* Brand */}
-          <div className="flex items-center gap-2 mb-2">
-            <div className="h-9 w-9 rounded-lg bg-linear-to-br from-indigo-600 to-violet-600 flex items-center justify-center font-bold text-white shadow-md">
-              R
-            </div>
-            <span className="font-display text-lg font-bold tracking-tight text-slate-900">
-              RepoInsight
-            </span>
-          </div>
-
-          <div className="space-y-1">
-            <h1 className="font-display text-3xl font-bold leading-tight text-slate-900">
-              Log in to{" "}
-              <span className="bg-linear-to-r from-indigo-600 via-violet-600 to-purple-600 bg-clip-text text-transparent animate-gradient">
-                keep building.
-              </span>
-            </h1>
-            <p className="text-sm text-slate-500">
-              Continue your open-source journey — your skill graph is waiting.
+      <div
+        className={`w-full md:w-1/2 min-h-screen flex items-center justify-center p-8 border-l ${
+          isDark ? "bg-[#030107] border-white/5" : "bg-[#FAFAFA] border-black/5"
+        }`}
+      >
+        <div className="w-full max-w-sm space-y-8">
+          <div>
+            <h2
+              className={`text-2xl font-black tracking-tight font-sans ${isDark ? "text-white" : "text-[#000000]"}`}
+            >
+              Welcome Back
+            </h2>
+            <p
+              className={`text-xs mt-1 font-mono ${isDark ? "text-[#1098F7]/70" : "text-[#2541B2]/70"}`}
+            >
+              Sign in to continue contributing to open source.
             </p>
           </div>
 
-          {/* Divider */}
-          <div className="my-4 flex items-center gap-3">
-            <div className="h-px flex-1 bg-slate-200" />
-            <span className="font-mono text-[10px] uppercase tracking-widest text-slate-400">
-              login with email
-            </span>
-            <div className="h-px flex-1 bg-slate-200" />
-          </div>
+          <form
+            className="space-y-5"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              setError(null);
 
-          {/* Form */}
-          <form className="space-y-4" onSubmit={handleSubmit}>
-            <div className="space-y-1.5">
+              try {
+                const res = await fetch(`/api/auth/login/`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  credentials: "include",
+                  body: JSON.stringify({ email, password }),
+                });
+
+                const data = await res.json().catch(() => null);
+
+                if (!res.ok) {
+                  const msg =
+                    (data && (data.error || data.detail)) ||
+                    `Login failed (${res.status})`;
+                  setError(msg);
+                  return;
+                }
+
+                localStorage.setItem("username", data?.username || email);
+                localStorage.setItem("email", email);
+                navigate("/chat");
+              } catch (err) {
+                setError(err instanceof Error ? err.message : "Login failed");
+              }
+            }}
+          >
+            <div className="space-y-1">
               <label
                 htmlFor="login-email"
-                className="text-xs font-semibold text-slate-600"
+                className={`text-[10px] font-mono tracking-widest uppercase ${isDark ? "text-[#1098F7]" : "text-[#2541B2]"}`}
               >
                 Email
               </label>
-              <div className="relative">
-                <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <Input
-                  type="text"
-                  placeholder="you@repo.dev"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  className="pl-9 bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400 focus-visible:border-violet-600 focus-visible:ring-violet-600/20"
-                />
-              </div>
+              <input
+                id="login-email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="developer@example.com"
+                className={`w-full border rounded-lg px-4 py-3 text-sm font-mono focus:outline-none transition-all ${
+                  isDark
+                    ? "bg-[#0A0712] border-white/10 text-white focus:border-[#1098F7]"
+                    : "bg-white border-black/10 text-black focus:border-[#2541B2]"
+                }`}
+                required
+              />
             </div>
 
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <label
-                  htmlFor="login-password"
-                  className="text-xs font-semibold text-slate-600"
-                >
-                  Password
-                </label>
-                <button
-                  type="button"
-                  className="text-xs font-semibold text-violet-600 hover:text-violet-700 hover:underline bg-transparent border-none cursor-pointer"
-                >
-                  Forgot?
-                </button>
-              </div>
-              <div className="relative">
-                <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <Input
-                  type={showPassword ? "text" : "password"}
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  className="pl-9 pr-9 bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400 focus-visible:border-violet-600 focus-visible:ring-violet-600/20"
-                />
-
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((s) => !s)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                >
-                  {showPassword ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
-                </button>
-              </div>
+            <div className="space-y-1">
+              <label
+                htmlFor="login-password"
+                className={`text-[10px] font-mono tracking-widest uppercase ${isDark ? "text-[#1098F7]" : "text-[#2541B2]"}`}
+              >
+                Password
+              </label>
+              <input
+                id="login-password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter your password"
+                className={`w-full border rounded-lg px-4 py-3 text-sm font-mono focus:outline-none transition-all ${
+                  isDark
+                    ? "bg-[#0A0712] border-white/10 text-white focus:border-[#1098F7]"
+                    : "bg-white border-black/10 text-black focus:border-[#2541B2]"
+                }`}
+                required
+              />
             </div>
+
             {error && (
-              <p className="text-sm text-red-500 mb-2 font-medium">{error}</p>
+              <p
+                className={`text-xs text-red-500 mb-2 ${isDark ? "text-red-400" : "text-red-600"}`}
+              >
+                {error}
+              </p>
             )}
 
-            <Button
+            <button
               type="submit"
-              disabled={loading}
-              className="group w-full bg-linear-to-r from-indigo-600 via-violet-600 to-purple-600 text-white hover:opacity-95 shadow-md shadow-violet-500/20 transition cursor-pointer"
+              className={`w-full font-mono font-bold text-xs uppercase tracking-widest py-3.5 rounded-lg transition-all cursor-pointer ${
+                isDark
+                  ? "bg-white text-black hover:bg-white/90"
+                  : "bg-[#000000] text-white hover:bg-[#2541B2]"
+              }`}
             >
-              {loading ? "Logging in..." : "Log in"}
-              <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-            </Button>
+              Sign In
+            </button>
           </form>
 
-          {/* Link to signup */}
-          <p className="text-center text-sm text-slate-600">
+          <p
+            className={`text-center text-xs font-mono ${isDark ? "text-[#1098F7]/50" : "text-[#2541B2]/50"}`}
+          >
             Don&apos;t have an account?{" "}
             <Link
               to="/signup"
-              className="text-violet-600 hover:text-violet-700 font-semibold hover:underline"
+              className={`${isDark ? "text-white" : "text-[#000000]"} hover:underline`}
             >
-              Sign up
+              Create Account
             </Link>
           </p>
         </div>

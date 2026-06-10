@@ -5,6 +5,7 @@ import ReactMarkdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
 
+import { useTheme } from "@/components/ThemeToggle";
 import { api, poll } from "@/lib/api";
 import { upsertSession, newLocalId } from "@/lib/sessionStore";
 import { cn } from "@/lib/utils";
@@ -16,6 +17,8 @@ const WELCOME = {
 };
 
 export function CurrentSession({ activeSession }) {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
   const [stage, setStage] = useState(
     activeSession?.sessionId ? "ready" : "idle",
   );
@@ -255,15 +258,20 @@ export function CurrentSession({ activeSession }) {
 
   const getDifficultyClass = (difficulty) => {
     if (difficulty === "beginner") {
-      return "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300";
+      return isDark
+        ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/20"
+        : "bg-emerald-50 text-emerald-700 border border-emerald-200";
     }
     if (difficulty === "advanced") {
-      return "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300";
+      return isDark
+        ? "bg-red-500/15 text-red-400 border border-red-500/20"
+        : "bg-red-50 text-red-700 border border-red-200";
     }
-    return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300";
+    return isDark
+      ? "bg-amber-500/15 text-amber-400 border border-amber-500/20"
+      : "bg-amber-50 text-amber-700 border border-amber-200";
   };
 
-  // Helper functions to replace nested ternaries in button logic
   const getButtonDisabledState = (isThisSelected, hasAnySelected) => {
     if (isThisSelected) return true;
     if (hasAnySelected) return true;
@@ -272,12 +280,18 @@ export function CurrentSession({ activeSession }) {
 
   const getButtonClassName = (isThisSelected, hasAnySelected) => {
     if (isThisSelected) {
-      return "w-full py-2 text-xs font-semibold rounded-lg transition-all bg-green-600 text-white cursor-default";
+      return isDark
+        ? "w-full py-2 text-xs font-semibold rounded-xl transition-all bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 cursor-default"
+        : "w-full py-2 text-xs font-semibold rounded-xl transition-all bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-default";
     }
     if (hasAnySelected) {
-      return "w-full py-2 text-xs font-semibold rounded-lg transition-all bg-gray-50 text-gray-400 dark:bg-zinc-800/60 dark:text-zinc-600 cursor-not-allowed border border-dashed border-gray-200 dark:border-zinc-700";
+      return isDark
+        ? "w-full py-2 text-xs font-semibold rounded-xl transition-all bg-white/5 text-white/20 border border-white/10 cursor-not-allowed"
+        : "w-full py-2 text-xs font-semibold rounded-xl transition-all bg-black/5 text-black/20 border border-black/10 cursor-not-allowed";
     }
-    return "w-full py-2 text-xs font-semibold rounded-lg transition-all bg-violet-600 text-white hover:bg-violet-700 shadow-xs cursor-pointer";
+    return isDark
+      ? "w-full py-2 text-xs font-semibold rounded-xl transition-all bg-[#2541B2] text-white hover:bg-[#1098F7] cursor-pointer"
+      : "w-full py-2 text-xs font-semibold rounded-xl transition-all bg-[#2541B2] text-white hover:bg-[#1098F7] cursor-pointer";
   };
 
   const getButtonText = (isThisSelected, hasAnySelected) => {
@@ -302,9 +316,15 @@ export function CurrentSession({ activeSession }) {
   else if (stage === "recommendations") statusText = "recommendations";
 
   const InputArea = (
-    <div className="border-t border-gray-200 dark:border-gray-800 bg-background p-4">
+    <div
+      className={`border-t p-4 ${isDark ? "border-white/6" : "border-black/6"}`}
+    >
       {error && <p className="mb-2 text-xs text-red-500">{error}</p>}
-      <div className="flex items-end gap-2 rounded-xl border border-gray-200 dark:border-gray-800 bg-card transition-colors focus-within:border-primary p-2">
+      <div
+        className={`flex items-end gap-2 rounded-2xl border p-2 transition-colors focus-within:border-[#2541B2] ${
+          isDark ? "border-white/8 bg-white/3" : "border-black/8 bg-black/2"
+        }`}
+      >
         <textarea
           ref={textareaRef}
           value={input}
@@ -322,7 +342,11 @@ export function CurrentSession({ activeSession }) {
           }}
           placeholder={placeholderText}
           rows={1}
-          className="flex-1 resize-none bg-transparent px-2 py-1.5 text-sm text-foreground placeholder:text-muted-foreground outline-none disabled:opacity-60"
+          className={`flex-1 resize-none bg-transparent px-3 py-2.5 text-sm outline-none disabled:opacity-50 ${
+            isDark
+              ? "text-white placeholder:text-white/25"
+              : "text-black placeholder:text-black/25"
+          }`}
           style={{ height: 40, maxHeight: 160 }}
         />
         <button
@@ -331,7 +355,9 @@ export function CurrentSession({ activeSession }) {
             busy || (stage !== "ready" && stage !== "idle") || !input.trim()
           }
           aria-label="Send"
-          className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white shadow-md transition-transform hover:scale-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+          className={`flex h-8 w-8 items-center justify-center rounded-xl transition-all hover:scale-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 ${
+            isDark ? "bg-white text-black" : "bg-[#000000] text-white"
+          }`}
         >
           {busy ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -348,9 +374,19 @@ export function CurrentSession({ activeSession }) {
     return (
       <div className="flex h-full flex-col">
         <div className="flex-1 overflow-y-auto p-6">
-          <div className="max-w-2xl mx-auto bg-card rounded-xl border border-gray-200 dark:border-gray-850 p-6 space-y-6">
-            <h3 className="text-xl font-display font-bold">Your Skills</h3>
-            <p className="text-sm text-muted-foreground">
+          <div
+            className={`max-w-2xl mx-auto rounded-2xl border p-6 space-y-6 ${
+              isDark ? "bg-white/2 border-white/6" : "bg-white border-black/6"
+            }`}
+          >
+            <h3
+              className={`text-xl font-bold ${isDark ? "text-white" : "text-black"}`}
+            >
+              Your Skills
+            </h3>
+            <p
+              className={`text-sm ${isDark ? "text-white/50" : "text-black/50"}`}
+            >
               Select the skills you have and your proficiency level.
             </p>
             <div className="space-y-4">
@@ -359,7 +395,11 @@ export function CurrentSession({ activeSession }) {
                   key={skill}
                   className="flex items-center justify-between gap-4"
                 >
-                  <span className="text-sm font-medium w-32">{skill}</span>
+                  <span
+                    className={`text-sm font-medium w-32 ${isDark ? "text-white" : "text-black"}`}
+                  >
+                    {skill}
+                  </span>
                   <div className="flex gap-2">
                     {["beginner", "intermediate", "advanced"].map((band) => (
                       <button
@@ -385,8 +425,12 @@ export function CurrentSession({ activeSession }) {
                           selectedSkills.some(
                             (s) => s.skill === skill && s.band === band,
                           )
-                            ? "bg-violet-600 text-white border-violet-600 shadow-xs scale-105"
-                            : "bg-background text-foreground border-gray-300 dark:border-zinc-700 hover:bg-secondary"
+                            ? isDark
+                              ? "bg-[#2541B2] text-white border-[#2541B2]"
+                              : "bg-[#2541B2] text-white border-[#2541B2]"
+                            : isDark
+                              ? "bg-white/5 text-white/60 border-white/10 hover:bg-white/10"
+                              : "bg-black/5 text-black/60 border-black/10 hover:bg-black/10"
                         }`}
                       >
                         {band.charAt(0).toUpperCase() + band.slice(1)}
@@ -399,7 +443,11 @@ export function CurrentSession({ activeSession }) {
             <button
               onClick={submitSkillsAndGetRecommendations}
               disabled={selectedSkills.length === 0}
-              className="w-full py-2 bg-violet-600 text-white font-medium hover:bg-violet-700 rounded-lg disabled:opacity-50 shadow-xs cursor-pointer"
+              className={`w-full py-2.5 font-medium rounded-xl disabled:opacity-40 transition-all cursor-pointer ${
+                isDark
+                  ? "bg-white text-black hover:bg-white/90"
+                  : "bg-[#000000] text-white hover:bg-[#2541B2]"
+              }`}
             >
               Continue
             </button>
@@ -410,15 +458,22 @@ export function CurrentSession({ activeSession }) {
     );
   }
 
-  // Initial state (only URL input)
+  // Initial state
   if (isInitial) {
     return (
       <div className="h-full flex flex-col">
         <div className="flex-1 flex items-center justify-center px-6">
-          <div className="w-full max-w-2xl">
-            <h2 className="text-2xl font-display font-bold text-center mb-8">
-              Let&rsquo;s find your next open-source contribution
+          <div className="w-full max-w-2xl text-center">
+            <h2
+              className={`text-2xl font-bold mb-2 ${isDark ? "text-white" : "text-black"}`}
+            >
+              Let&apos;s find your next open-source contribution
             </h2>
+            <p
+              className={`text-sm mb-8 ${isDark ? "text-white/40" : "text-black/40"}`}
+            >
+              Paste a GitHub repository URL to get started
+            </p>
             {InputArea}
           </div>
         </div>
@@ -426,25 +481,39 @@ export function CurrentSession({ activeSession }) {
     );
   }
 
-  // Normal chat mode (after issue selected, regular conversation or inline recommendations)
+  // Normal chat mode
   return (
-    <div className="flex h-full flex-col bg-background">
+    <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-3 border-b border-gray-200 dark:border-zinc-800 bg-background">
+      <div
+        className={`flex items-center justify-between px-6 py-3 border-b ${
+          isDark ? "border-white/6" : "border-black/6"
+        }`}
+      >
         <div className="flex items-center gap-3">
-          <span className="font-semibold text-foreground">
+          <span
+            className={`font-semibold text-sm ${isDark ? "text-white" : "text-black"}`}
+          >
             {repoLabel || "No repo selected"}
           </span>
           {phase && repoLabel && (
-            <span className="rounded-md bg-violet-600/15 px-2 py-0.5 text-xs font-medium text-violet-300">
+            <span
+              className={`rounded-lg px-2.5 py-0.5 text-[10px] font-medium ${
+                isDark
+                  ? "bg-[#2541B2]/20 text-[#1098F7]"
+                  : "bg-[#2541B2]/10 text-[#2541B2]"
+              }`}
+            >
               {phase}
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <div
+          className={`flex items-center gap-2 text-[10px] ${isDark ? "text-white/30" : "text-black/30"}`}
+        >
           <span
             className={cn(
-              "w-2 h-2 rounded-full",
+              "w-1.5 h-1.5 rounded-full",
               busy ? "bg-amber-400 animate-pulse" : "bg-emerald-400",
             )}
           />
@@ -455,7 +524,7 @@ export function CurrentSession({ activeSession }) {
       {/* Messages */}
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto px-6 py-6 space-y-5"
+        className="flex-1 overflow-y-auto px-6 py-6 space-y-6"
       >
         {messages.map((msg, i) => (
           <MessageBubble
@@ -467,17 +536,16 @@ export function CurrentSession({ activeSession }) {
             getButtonClassName={getButtonClassName}
             getButtonText={getButtonText}
             getDifficultyClass={getDifficultyClass}
+            isDark={isDark}
           />
         ))}
       </div>
 
-      {/* Input area (normal chat) */}
       {InputArea}
     </div>
   );
 }
 
-// Message bubble component with helper functions passed as props
 function MessageBubble({
   msg,
   selectedIssueId,
@@ -486,10 +554,11 @@ function MessageBubble({
   getButtonClassName,
   getButtonText,
   getDifficultyClass,
+  isDark,
 }) {
   const isUser = msg.role === "user";
   const [copied, setCopied] = useState(false);
-  const [feedback, setFeedback] = useState(null); // 'good' | 'bad' | null
+  const [feedback, setFeedback] = useState(null);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(msg.content);
@@ -509,8 +578,8 @@ function MessageBubble({
         className={cn(
           "max-w-[85%] leading-relaxed",
           isUser
-            ? "bg-gray-100 dark:bg-zinc-800 text-black dark:text-gray-100 rounded-2xl px-4 py-3 shadow-xs border border-gray-200 dark:border-zinc-700"
-            : "bg-transparent text-foreground w-full py-2 border-none ring-0 shadow-none",
+            ? `rounded-2xl px-4 py-3 ${isDark ? "bg-[#2541B2] text-white" : "bg-[#2541B2] text-white"}`
+            : "w-full py-1",
         )}
       >
         {isUser ? (
@@ -527,8 +596,11 @@ function MessageBubble({
                     if (!inline && match) {
                       const codeString = String(children).replace(/\n$/, "");
                       return (
-                        <div className="relative group my-2">
-                          <pre className={className} {...props}>
+                        <div className="relative group/my-2">
+                          <pre
+                            className={`${className} rounded-xl p-4 overflow-x-auto text-xs`}
+                            {...props}
+                          >
                             <code className={match[1]}>{children}</code>
                           </pre>
                           <button
@@ -537,7 +609,11 @@ function MessageBubble({
                               setCopied(true);
                               setTimeout(() => setCopied(false), 2000);
                             }}
-                            className="absolute top-2 right-2 p-1 rounded bg-gray-800 text-gray-300 hover:text-white opacity-0 group-hover:opacity-100 transition cursor-pointer"
+                            className={`absolute top-2 right-2 p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity ${
+                              isDark
+                                ? "bg-white/10 text-white/60 hover:text-white"
+                                : "bg-black/10 text-black/60 hover:text-black"
+                            }`}
                           >
                             {copied ? <Check size={14} /> : <Copy size={14} />}
                           </button>
@@ -545,7 +621,14 @@ function MessageBubble({
                       );
                     }
                     return (
-                      <code className={className} {...props}>
+                      <code
+                        className={`${className} px-1 py-0.5 rounded text-xs ${
+                          isDark
+                            ? "bg-white/10 text-white/80"
+                            : "bg-black/10 text-black/80"
+                        }`}
+                        {...props}
+                      >
                         {children}
                       </code>
                     );
@@ -556,13 +639,17 @@ function MessageBubble({
               </ReactMarkdown>
             </div>
 
-            {/* Render inline recommendations if present */}
+            {/* Inline recommendations */}
             {msg.recommendations && msg.recommendations.length > 0 && (
-              <div className="mt-4 pt-4 border-t border-gray-200 dark:border-zinc-800">
-                <h4 className="font-display font-semibold text-sm mb-3">
-                  Recommended Issues:
+              <div
+                className={`mt-4 pt-4 ${isDark ? "border-t border-white/6" : "border-t border-black/6"}`}
+              >
+                <h4
+                  className={`font-semibold text-sm mb-3 ${isDark ? "text-white" : "text-black"}`}
+                >
+                  Recommended Issues
                 </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {msg.recommendations.map((issue) => {
                     const isThisSelected = selectedIssueId === issue.id;
                     const hasAnySelected = selectedIssueId !== null;
@@ -570,14 +657,20 @@ function MessageBubble({
                       <div
                         key={issue.id}
                         className={cn(
-                          "bg-card border rounded-xl p-4 space-y-3 transition-all",
+                          "border rounded-xl p-4 space-y-3 transition-all",
                           isThisSelected
-                            ? "border-violet-500 ring-2 ring-violet-500/20"
-                            : "border-gray-200 dark:border-zinc-800",
+                            ? isDark
+                              ? "border-[#2541B2] ring-1 ring-[#2541B2]/20 bg-[#2541B2]/5"
+                              : "border-[#2541B2] ring-1 ring-[#2541B2]/20 bg-[#2541B2]/5"
+                            : isDark
+                              ? "border-white/6 bg-white/2"
+                              : "border-black/6 bg-white",
                         )}
                       >
                         <div className="flex justify-between items-start gap-2">
-                          <h5 className="font-semibold text-sm leading-snug text-foreground line-clamp-2">
+                          <h5
+                            className={`font-semibold text-sm leading-snug line-clamp-2 ${isDark ? "text-white" : "text-black"}`}
+                          >
                             {issue.title}
                           </h5>
                           <span
@@ -591,7 +684,9 @@ function MessageBubble({
                         </div>
 
                         {issue.summary && (
-                          <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">
+                          <p
+                            className={`text-xs line-clamp-3 leading-relaxed ${isDark ? "text-white/40" : "text-black/40"}`}
+                          >
                             {issue.summary}
                           </p>
                         )}
@@ -600,7 +695,11 @@ function MessageBubble({
                           {issue.skills?.slice(0, 3).map((skill) => (
                             <span
                               key={skill}
-                              className="text-[10px] bg-secondary text-secondary-foreground px-2 py-0.5 rounded-full font-medium"
+                              className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                                isDark
+                                  ? "bg-white/5 text-white/60"
+                                  : "bg-black/5 text-black/60"
+                              }`}
                             >
                               {skill}
                             </span>
@@ -627,12 +726,18 @@ function MessageBubble({
               </div>
             )}
 
-            {/* Action buttons (Copy / Good / Bad) */}
+            {/* Action buttons */}
             {!msg.pending && msg.content && (
-              <div className="flex items-center gap-2 mt-3 text-xs text-muted-foreground">
+              <div
+                className={`flex items-center gap-2 mt-3 text-xs ${isDark ? "text-white/30" : "text-black/30"}`}
+              >
                 <button
                   onClick={handleCopy}
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-gray-200 dark:border-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-800/50 hover:text-foreground transition-colors cursor-pointer"
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition-colors ${
+                    isDark
+                      ? "border-white/8 hover:bg-white/5 hover:text-white/60"
+                      : "border-black/8 hover:bg-black/5 hover:text-black/60"
+                  }`}
                 >
                   {copied ? (
                     <Check className="h-3.5 w-3.5" />
@@ -644,10 +749,14 @@ function MessageBubble({
                 <button
                   onClick={() => handleFeedback("good")}
                   className={cn(
-                    "flex items-center gap-1.5 px-2.5 py-1 rounded-lg border transition-colors cursor-pointer",
+                    "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition-colors",
                     feedback === "good"
-                      ? "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800 text-green-600 dark:text-green-400 font-medium"
-                      : "border-gray-200 dark:border-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-800/50 hover:text-foreground",
+                      ? isDark
+                        ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                        : "bg-emerald-50 border-emerald-200 text-emerald-600"
+                      : isDark
+                        ? "border-white/8 hover:bg-white/5 hover:text-white/60"
+                        : "border-black/8 hover:bg-black/5 hover:text-black/60",
                   )}
                 >
                   <ThumbsUp className="h-3.5 w-3.5" />
@@ -656,10 +765,14 @@ function MessageBubble({
                 <button
                   onClick={() => handleFeedback("bad")}
                   className={cn(
-                    "flex items-center gap-1.5 px-2.5 py-1 rounded-lg border transition-colors cursor-pointer",
+                    "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition-colors",
                     feedback === "bad"
-                      ? "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 font-medium"
-                      : "border-gray-200 dark:border-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-800/50 hover:text-foreground",
+                      ? isDark
+                        ? "bg-red-500/10 border-red-500/20 text-red-400"
+                        : "bg-red-50 border-red-200 text-red-600"
+                      : isDark
+                        ? "border-white/8 hover:bg-white/5 hover:text-white/60"
+                        : "border-black/8 hover:bg-black/5 hover:text-black/60",
                   )}
                 >
                   <ThumbsDown className="h-3.5 w-3.5" />
@@ -671,13 +784,13 @@ function MessageBubble({
         )}
         {msg.pending && (
           <span className="ml-1 inline-flex gap-1 mt-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" />
+            <span className="w-1.5 h-1.5 rounded-full bg-[#1098F7] animate-bounce" />
             <span
-              className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce"
+              className="w-1.5 h-1.5 rounded-full bg-[#1098F7] animate-bounce"
               style={{ animationDelay: "150ms" }}
             />
             <span
-              className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce"
+              className="w-1.5 h-1.5 rounded-full bg-[#1098F7] animate-bounce"
               style={{ animationDelay: "300ms" }}
             />
           </span>
