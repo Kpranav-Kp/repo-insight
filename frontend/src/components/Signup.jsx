@@ -1,212 +1,175 @@
-// frontend/src/components/SignupPage.jsx
-// Signup page component - standalone page with grid background and blobs (visual appeal)
-// No Dialog wrapper - this is a full page component
-import { Mail, Lock, User, ArrowRight, Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { useTheme } from "@/components/ThemeToggle";
 
-export default function SignupPage() {
-  const [showPassword, setShowPassword] = useState(false);
+import SpacePanel from "./SpacePanel";
+
+export default function Signup() {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const navigate = useNavigate();
 
-  const handleSignup = async (e) => {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-
-    try {
-      const res = await fetch("/api/auth/signup/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, email, password }),
-      });
-
-      if (!res.ok) {
-        setError("Signup failed. Try different credentials.");
-        setLoading(false);
-        return;
-      }
-
-      // Auto-login after signup
-      try {
-        const loginRes = await fetch("/api/auth/login/", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password }),
-        });
-
-        if (loginRes.ok) {
-          const loginData = await loginRes.json();
-          localStorage.setItem("username", loginData.username);
-          localStorage.setItem("email", email);
-          setLoading(false);
-          navigate("/chat");
-        } else {
-          setLoading(false);
-          navigate("/login");
-        }
-      } catch (_err) {
-        setLoading(false);
-        navigate("/login");
-      }
-    } catch (_err) {
-      setError("Network error — is backend running?");
-      setLoading(false);
-    }
-  };
-
   return (
-    <div className="relative min-h-screen w-full overflow-hidden bg-background bg-grid flex items-center justify-center px-4 py-12">
-      {/* Animated gradient blobs - kept for visual appeal on public pages */}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -top-24 -left-24 h-96 w-96 rounded-full bg-primary/30 blur-3xl animate-blob" />
-        <div className="absolute top-1/3 -right-24 h-96 w-96 rounded-full bg-primary/20 blur-3xl animate-blob animation-delay-2000" />
-        <div className="absolute -bottom-24 left-1/3 h-96 w-96 rounded-full bg-violet-600/15 blur-3xl animate-blob animation-delay-4000" />
+    <div
+      className={`min-h-screen flex flex-col md:flex-row ${isDark ? "bg-[#000000]" : "bg-[#FFFFFF]"}`}
+    >
+      <div className="hidden md:block md:w-1/2 h-screen sticky top-0">
+        <SpacePanel />
       </div>
 
-      {/* Card - glassmorphism kept for signup page visual appeal */}
-      <Card className="relative z-10 w-full max-w-md border-border/60 bg-card/70 backdrop-blur-xl shadow-2xl shadow-primary/10 p-8 rounded-2xl">
-        {/* Glow border accent */}
-        <div className="pointer-events-none absolute -inset-px rounded-2xl bg-linear-to-br from-primary/40 via-transparent to-fuchsia-500/30 opacity-60 p-px" />
-
-        {/* Brand */}
-        <div className="flex items-center gap-2 mb-6">
-          <div className="h-9 w-9 rounded-lg bg-linear-to-br from-primary to-violet-600 flex items-center justify-center font-bold text-primary-foreground">
-            R
-          </div>
-          <span className="font-display text-lg font-semibold">
-            RepoInsight
-          </span>
-        </div>
-
-        <Badge className="mb-4 text-[10px] uppercase border-primary/40 text-primary">
-          v1.0 · create account
-        </Badge>
-
-        <h1 className="font-display text-3xl font-bold">
-          Start{" "}
-          <span className="bg-linear-to-r from-indigo-600 via-violet-600 to-purple-600 bg-clip-text text-transparent">
-            building.
-          </span>
-        </h1>
-
-        <p className="mt-2 text-sm text-muted-foreground">
-          Create your account and begin your open-source journey.
-        </p>
-
-        {/* Divider */}
-        <div className="my-6 flex items-center gap-3">
-          <div className="h-px flex-1 bg-border" />
-          <span className="text-[10px] uppercase text-muted-foreground">
-            signup with email
-          </span>
-          <div className="h-px flex-1 bg-border" />
-        </div>
-
-        {/* FORM */}
-        <form className="space-y-4" onSubmit={handleSignup}>
-          {/* Username */}
-          <div className="space-y-1.5">
-            <label
-              htmlFor="signup-username"
-              className="text-xs text-muted-foreground"
+      <div
+        className={`w-full md:w-1/2 min-h-screen flex items-center justify-center p-8 border-l ${
+          isDark ? "bg-[#030107] border-white/5" : "bg-[#FAFAFA] border-black/5"
+        }`}
+      >
+        <div className="w-full max-w-sm space-y-8">
+          <div>
+            <h2
+              className={`text-2xl font-black tracking-tight font-sans ${isDark ? "text-white" : "text-[#000000]"}`}
             >
-              Username
-            </label>
-            <div className="relative">
-              <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
+              Create Account
+            </h2>
+            <p
+              className={`text-xs mt-1 font-mono ${isDark ? "text-[#1098F7]/70" : "text-[#2541B2]/70"}`}
+            >
+              Get started with contributing to real open source projects.
+            </p>
+          </div>
+
+          <form
+            className="space-y-4"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              setError(null);
+
+              try {
+                const res = await fetch(`/api/auth/signup/`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  credentials: "include",
+                  body: JSON.stringify({ username, email, password }),
+                });
+
+                const data = await res.json().catch(() => null);
+
+                if (!res.ok) {
+                  const msg =
+                    (data && (data.error || data.detail)) ||
+                    `Signup failed (${res.status})`;
+                  setError(msg);
+                  return;
+                }
+
+                // After signup, go to login (no auto-login cookies currently)
+                navigate("/login");
+              } catch (err) {
+                setError(err instanceof Error ? err.message : "Signup failed");
+              }
+            }}
+          >
+            <div className="space-y-1">
+              <label
+                htmlFor="signup-username"
+                className={`text-[10px] font-mono tracking-widest uppercase ${isDark ? "text-[#1098F7]" : "text-[#2541B2]"}`}
+              >
+                Username
+              </label>
+              <input
+                id="signup-username"
                 type="text"
-                placeholder="yourusername"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
+                placeholder="your_username"
+                className={`w-full border rounded-lg px-4 py-3 text-sm font-mono focus:outline-none transition-all ${
+                  isDark
+                    ? "bg-[#0A0712] border-white/10 text-white focus:border-[#1098F7]"
+                    : "bg-white border-black/10 text-black focus:border-[#2541B2]"
+                }`}
                 required
-                className="pl-9 bg-secondary/40"
               />
             </div>
-          </div>
 
-          {/* Email */}
-          <div className="space-y-1.5">
-            <label
-              htmlFor="signup-email"
-              className="text-xs text-muted-foreground"
-            >
-              Email
-            </label>
-            <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
+            <div className="space-y-1">
+              <label
+                htmlFor="signup-email"
+                className={`text-[10px] font-mono tracking-widest uppercase ${isDark ? "text-[#1098F7]" : "text-[#2541B2]"}`}
+              >
+                Email
+              </label>
+              <input
+                id="signup-email"
                 type="email"
-                placeholder="you@repo.dev"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                placeholder="developer@example.com"
+                className={`w-full border rounded-lg px-4 py-3 text-sm font-mono focus:outline-none transition-all ${
+                  isDark
+                    ? "bg-[#0A0712] border-white/10 text-white focus:border-[#1098F7]"
+                    : "bg-white border-black/10 text-black focus:border-[#2541B2]"
+                }`}
                 required
-                className="pl-9 bg-secondary/40"
               />
             </div>
-          </div>
 
-          {/* Password */}
-          <div className="space-y-1.5">
-            <label
-              htmlFor="signup-password"
-              className="text-xs text-muted-foreground"
-            >
-              Password
-            </label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                type={showPassword ? "text" : "password"}
+            <div className="space-y-1">
+              <label
+                htmlFor="signup-password"
+                className={`text-[10px] font-mono tracking-widest uppercase ${isDark ? "text-[#1098F7]" : "text-[#2541B2]"}`}
+              >
+                Password
+              </label>
+              <input
+                id="signup-password"
+                type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                placeholder="Create a strong password"
+                className={`w-full border rounded-lg px-4 py-3 text-sm font-mono focus:outline-none transition-all ${
+                  isDark
+                    ? "bg-[#0A0712] border-white/10 text-white focus:border-[#1098F7]"
+                    : "bg-white border-black/10 text-black focus:border-[#2541B2]"
+                }`}
                 required
-                className="pl-9 pr-9 bg-secondary/40"
               />
-
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2"
-              >
-                {showPassword ? <EyeOff /> : <Eye />}
-              </button>
             </div>
-          </div>
 
-          {error && <p className="text-sm text-red-400">{error}</p>}
+            {error && (
+              <p
+                className={`text-xs text-red-500 mb-2 ${isDark ? "text-red-400" : "text-red-600"}`}
+              >
+                {error}
+              </p>
+            )}
+            <button
+              type="submit"
+              className={`w-full font-mono font-bold text-xs uppercase tracking-widest py-3.5 rounded-lg transition-all cursor-pointer ${
+                isDark
+                  ? "bg-white text-black hover:bg-white/90"
+                  : "bg-[#000000] text-white hover:bg-[#2541B2]"
+              }`}
+            >
+              Create Account
+            </button>
+          </form>
 
-          <Button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-linear-to-r from-indigo-600 via-violet-600 to-purple-600"
+          <p
+            className={`text-center text-xs font-mono ${isDark ? "text-[#1098F7]/50" : "text-[#2541B2]/50"}`}
           >
-            {loading ? "Creating..." : "Sign up"}
-            <ArrowRight className="ml-2 h-4 w-4" />
-          </Button>
-        </form>
-
-        <p className="mt-6 text-center text-sm text-muted-foreground">
-          Already have an account?{" "}
-          <Link
-            to="/login"
-            className="text-primary hover:underline font-medium"
-          >
-            Log in
-          </Link>
-        </p>
-      </Card>
+            Already have an account?{" "}
+            <Link
+              to="/login"
+              className={`${isDark ? "text-white" : "text-[#000000]"} hover:underline`}
+            >
+              Sign In
+            </Link>
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

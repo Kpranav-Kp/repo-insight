@@ -174,11 +174,21 @@ SENTENCE_TRANSFORMER_MODEL = os.getenv(
     "SENTENCE_TRANSFORMER_MODEL", default="all-MiniLM-L6-v2"
 )
 
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
-OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL")
+LLM_PROVIDERS = [
+    p.strip().lower()
+    for p in os.getenv(
+        "LLM_PROVIDERS",
+        os.getenv("LLM_PROVIDER", "cloudflare,groq"),
+    ).split(",")
+    if p.strip()
+]
+CLOUDFLARE_API_TOKEN = os.getenv("CLOUDFLARE_API_TOKEN")
+CLOUDFLARE_ACCOUNT_ID = os.getenv("CLOUDFLARE_ACCOUNT_ID")
+CLOUDFLARE_MODEL = os.getenv("CLOUDFLARE_MODEL", "@cf/meta/llama-3.1-8b-instruct")
 GROQ_API_KEYS = [
     key.strip() for key in os.getenv("GROQ_API_KEYS", "").split(",") if key.strip()
 ]
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 GITHUB_ISSUE_LIMIT = int(os.getenv("GITHUB_ISSUE_LIMIT", 300))

@@ -1,767 +1,633 @@
-// frontend/src/components/LandingPage.jsx
+import { motion } from "framer-motion";
+import {
+  ArrowRight,
+  Compass,
+  HelpCircle,
+  Shield,
+  UserCircle,
+  BarChart3,
+  ChevronRight,
+} from "lucide-react";
 import { useRef, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { ThemeToggle } from "@/components/ThemeToggle";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 
-const TerminalTypewriter = ({ text, delay = 65, pause = 2200 }) => {
-  const [displayed, setDisplayed] = useState("");
-  const [phase, setPhase] = useState("typing");
+export default function LandingPage() {
+  const canvasRef = useRef(null);
+  const scrollContainerRef = useRef(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [flippedIdx, setFlippedIdx] = useState(null);
+  const [scrollY, setScrollY] = useState(0);
+  const dragStart = useRef({ x: 0, scrollLeft: 0 });
 
   useEffect(() => {
-    let timer;
-    if (phase === "typing") {
-      if (displayed.length < text.length) {
-        timer = setTimeout(
-          () => setDisplayed(text.slice(0, displayed.length + 1)),
-          delay,
-        );
-      } else {
-        timer = setTimeout(() => setPhase("deleting"), pause);
-      }
-    } else if (phase === "deleting") {
-      if (displayed.length > 0) {
-        timer = setTimeout(
-          () => setDisplayed(text.slice(0, displayed.length - 1)),
-          delay / 2,
-        );
-      } else {
-        timer = setTimeout(() => setPhase("typing"), 600);
-      }
-    }
-    return () => clearTimeout(timer);
-  }, [displayed, phase, text, delay, pause]);
-
-  return (
-    <span className="inline-flex items-center font-mono text-[13px]">
-      {displayed}
-      <span className="animate-pulse text-primary ml-0.5">▊</span>
-    </span>
-  );
-};
-
-const SemanticGraph = () => {
-  const [gPhase, setGPhase] = useState("nodes");
-
-  useEffect(() => {
-    const cycle = () => {
-      setGPhase("nodes");
-      setTimeout(() => setGPhase("edge"), 3000);
-      setTimeout(() => setGPhase("score"), 6000);
-    };
-    cycle();
-    const id = setInterval(cycle, 9500);
-    return () => clearInterval(id);
+    const onScroll = () => setScrollY(window.scrollY);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  const toRad = (deg) => (deg * Math.PI) / 180;
+  // ── 1. Full-Page Aurora Canvas ──
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
 
-  const skills = [
-    { name: "python", angle: -70, dist: 105, color: "#8b5cf6" },
-    { name: "http", angle: -10, dist: 120, color: "#f59e0b", issue: true },
-    { name: "auth", angle: 50, dist: 110, color: "#06b6d4" },
-    { name: "json", angle: 110, dist: 100, color: "#ec4899" },
-    { name: "test", angle: 160, dist: 115, color: "#10b981" },
+    let w = (canvas.width = window.innerWidth);
+    let h = (canvas.height = window.innerHeight);
+    let animationFrameId;
+    let time = 0;
+
+    const handleResize = () => {
+      w = canvas.width = window.innerWidth;
+      h = canvas.height = window.innerHeight;
+    };
+    window.addEventListener("resize", handleResize);
+
+    const darkColumns = [
+      {
+        color: "rgba(37, 65, 178, 0.65)",
+        baseLeft: 0.2,
+        widthFactor: 0.35,
+        speed: 0.0025,
+      },
+      {
+        color: "rgba(16, 152, 247, 0.58)",
+        baseLeft: 0.4,
+        widthFactor: 0.3,
+        speed: 0.003,
+      },
+      {
+        color: "rgba(86, 227, 159, 0.50)",
+        baseLeft: 0.55,
+        widthFactor: 0.35,
+        speed: 0.002,
+      },
+      {
+        color: "rgba(37, 65, 178, 0.52)",
+        baseLeft: 0.75,
+        widthFactor: 0.28,
+        speed: 0.0035,
+      },
+      {
+        color: "rgba(16, 152, 247, 0.45)",
+        baseLeft: 0.9,
+        widthFactor: 0.25,
+        speed: 0.0015,
+      },
+    ];
+
+    const render = () => {
+      ctx.clearRect(0, 0, w, h);
+      time += 0.4;
+      const activeColumns = darkColumns;
+
+      activeColumns.forEach((col, idx) => {
+        const centerOffset = Math.sin(time * col.speed + idx * 3) * (w * 0.08);
+        const colCenterX = w * col.baseLeft + centerOffset;
+        const colWidth = w * col.widthFactor;
+        const sliceHeight = 6;
+
+        for (let y = 0; y < h; y += sliceHeight) {
+          const ripple =
+            Math.sin(y * 0.004 + time * 0.008 + idx) * 50 +
+            Math.cos(y * 0.012 - time * 0.004) * 25;
+          const currentX = colCenterX + ripple;
+
+          const gradient = ctx.createLinearGradient(
+            currentX - colWidth / 2,
+            0,
+            currentX + colWidth / 2,
+            0,
+          );
+          gradient.addColorStop(0, "transparent");
+          gradient.addColorStop(0.5, col.color);
+          gradient.addColorStop(1, "transparent");
+
+          ctx.fillStyle = gradient;
+          ctx.globalCompositeOperation = "screen";
+          ctx.fillRect(currentX - colWidth / 2, y, colWidth, sliceHeight);
+        }
+      });
+
+      animationFrameId = requestAnimationFrame(render);
+    };
+
+    render();
+
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      cancelAnimationFrame(animationFrameId);
+    };
+  }, []);
+
+  // ── 2. Horizontal Scroll Tracking + MouseWheel → Horizontal + Drag ──
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const handleWheel = (e) => {
+      const maxScrollLeft = container.scrollWidth - container.clientWidth;
+      const hasVerticalIntent = Math.abs(e.deltaY) > Math.abs(e.deltaX);
+      if (!hasVerticalIntent) return;
+      const nextLeft = container.scrollLeft + e.deltaY;
+      const nextClamped = Math.max(0, Math.min(maxScrollLeft, nextLeft));
+      if (nextClamped === container.scrollLeft) return;
+      e.preventDefault();
+      container.scrollLeft = nextClamped;
+    };
+
+    container.addEventListener("wheel", handleWheel, { passive: false });
+
+    return () => {
+      container.removeEventListener("wheel", handleWheel);
+    };
+  }, []);
+
+  const handleMouseDown = (e) => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    setIsDragging(true);
+    dragStart.current = {
+      x: e.pageX - container.getBoundingClientRect().left,
+      scrollLeft: container.scrollLeft,
+    };
+  };
+
+  const handleMouseMove = (e) => {
+    if (!isDragging) return;
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    e.preventDefault();
+    const x = e.pageX - container.getBoundingClientRect().left;
+    const walk = (x - dragStart.current.x) * 1.5;
+    container.scrollLeft = dragStart.current.scrollLeft - walk;
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const howItWorksCards = [
+    {
+      num: "01",
+      title: "Skill-Based Issue Matching",
+      subtitle: "FAISS Semantic Graph",
+      icon: <Compass className="w-5 h-5" />,
+      description:
+        "Your developer profile maps your skills against live GitHub issues using a FAISS-powered semantic graph for precise, real-time matching.",
+      accent: "#2541B2",
+      stat: "95%",
+      statLabel: "Match Accuracy",
+    },
+    {
+      num: "02",
+      title: "Socratic Guidance",
+      subtitle: "LangGraph Multi-Agent",
+      icon: <HelpCircle className="w-5 h-5" />,
+      description:
+        "The AI never hands you code. Independent verification agents prompt your approach, forcing you to demonstrate genuine architectural understanding before advancing.",
+      accent: "#1098F7",
+      stat: "0",
+      statLabel: "Direct Solutions",
+    },
+    {
+      num: "03",
+      title: "Ethical Guardrails",
+      subtitle: "Controlled Assistance",
+      icon: <Shield className="w-5 h-5" />,
+      description:
+        "Maximum three boilerplate assists per session, each injected with explicit TODO comments. The system enforces learning integrity at every checkpoint.",
+      accent: "#56E39F",
+      stat: "3",
+      statLabel: "Max Assists",
+    },
+    {
+      num: "04",
+      title: "Learner Profile",
+      subtitle: "Persistent Progress Matrix",
+      icon: <UserCircle className="w-5 h-5" />,
+      description:
+        "An immutable conceptual profile catalogs your verified codebase masteries across sessions. Skills decay and grow based on demonstrated understanding, not completion.",
+      accent: "#2541B2",
+      stat: "∞",
+      statLabel: "Sessions Tracked",
+    },
+    {
+      num: "05",
+      title: "Knowledge Graph",
+      subtitle: "Skill Visualization",
+      icon: <BarChart3 className="w-5 h-5" />,
+      description:
+        "Your verified skills form an interconnected graph that grows with every contribution. Watch conceptual relationships strengthen as you demonstrate deeper understanding across repositories.",
+      accent: "#56E39F",
+      stat: "∞",
+      statLabel: "Skill Connections",
+    },
   ];
 
   return (
-    <div className="relative w-full h-full min-h-105 flex items-center justify-center">
-      <div className="absolute inset-0 bg-linear-to-tr from-primary/10 via-violet-500/5 to-blue-500/10 rounded-full blur-3xl animate-pulse-slow" />
+    <div className="relative min-h-screen overflow-x-hidden transition-colors duration-500 font-sans bg-[#000000] text-white">
+      {/* ── Full-Page Aurora Background (dims from 100% to 50% over 1 viewport scroll) ── */}
+      <canvas
+        ref={canvasRef}
+        className="fixed inset-0 pointer-events-none z-0 mix-blend-normal"
+        style={{
+          opacity: Math.max(0.8, 1 - scrollY / (window.innerHeight * 2)),
+        }}
+      />
+
+      {/* ── Aurora-only spacer — content hidden until one full scroll ── */}
+      <div className="h-screen relative z-10 pointer-events-none" />
+
+      {/* ── Scroll prompt — fades in after 1s, vanishes on scroll ── */}
+      {scrollY < window.innerHeight && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1, duration: 1 }}
+          className="fixed bottom-12 left-1/2 -translate-x-1/2 z-20 text-white/40 text-[10px] font-mono tracking-[0.2em] uppercase flex flex-col items-center"
+        >
+          <span>Scroll to explore</span>
+          <motion.span
+            animate={{ y: [0, 5, 0] }}
+            transition={{ repeat: Infinity, duration: 1.5 }}
+            className="mt-1.5 text-xs"
+          >
+            ↓
+          </motion.span>
+        </motion.div>
+      )}
 
       <div
-        className={`absolute inset-0 flex items-center justify-center transition-opacity duration-700 ${gPhase === "score" ? "opacity-0 scale-95" : "opacity-100 scale-100"}`}
+        className="relative"
+        style={{
+          opacity: scrollY >= window.innerHeight ? 1 : 0,
+          pointerEvents: scrollY >= window.innerHeight ? "auto" : "none",
+        }}
       >
-        <svg viewBox="0 0 400 400" className="w-full h-full max-w-110">
-          <defs>
-            <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur stdDeviation="5" result="blur" />
-              <feComposite in="SourceGraphic" in2="blur" operator="over" />
-            </filter>
-            <linearGradient id="edgeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop
-                offset="0%"
-                stopColor="hsl(var(--primary))"
-                stopOpacity="0.35"
-              />
-              <stop
-                offset="100%"
-                stopColor="hsl(var(--primary))"
-                stopOpacity="0.02"
-              />
-            </linearGradient>
-          </defs>
-
-          <circle
-            cx="200"
-            cy="200"
-            r="150"
-            fill="none"
-            stroke="hsl(var(--border))"
-            strokeWidth="0.5"
-            opacity="0.2"
-          />
-          <circle
-            cx="200"
-            cy="200"
-            r="100"
-            fill="none"
-            stroke="hsl(var(--border))"
-            strokeWidth="0.5"
-            opacity="0.15"
-          />
-
-          {skills.map((s) => {
-            const x = 200 + s.dist * Math.cos(toRad(s.angle));
-            const y = 200 + s.dist * Math.sin(toRad(s.angle));
-            const isIssue = s.issue;
-            return (
-              <g key={`e-${s.name}`}>
-                <line
-                  x1="200"
-                  y1="200"
-                  x2={x}
-                  y2={y}
-                  stroke={isIssue ? "#f59e0b" : "url(#edgeGrad)"}
-                  strokeWidth={isIssue ? 3 : 1}
-                  strokeDasharray={isIssue ? "none" : "4 6"}
-                  opacity={(() => {
-                    if (isIssue) return gPhase === "edge" ? 1 : 0.6;
-                    return 0.35;
-                  })()}
-                  className="transition-all duration-500"
-                />
-                {isIssue && gPhase === "edge" && (
-                  <circle r="3.5" fill="#f59e0b" filter="url(#glow)">
-                    <animateMotion
-                      dur="1.4s"
-                      repeatCount="indefinite"
-                      path={`M200,200 L${x},${y}`}
-                    />
-                  </circle>
-                )}
-              </g>
-            );
-          })}
-
-          {skills.map((s, i) => {
-            const x = 200 + s.dist * Math.cos(toRad(s.angle));
-            const y = 200 + s.dist * Math.sin(toRad(s.angle));
-            return (
-              <g
-                key={`n-${s.name}`}
-                className="animate-float-1"
-                style={{ animationDelay: `${i * 0.7}s` }}
-              >
-                <circle
-                  cx={x}
-                  cy={y}
-                  r="18"
-                  fill="hsl(var(--card))"
-                  stroke={s.color}
-                  strokeWidth="2.5"
-                />
-                <text
-                  x={x}
-                  y={y + 4}
-                  textAnchor="middle"
-                  fill="hsl(var(--foreground))"
-                  style={{
-                    fontSize: "10px",
-                    fontFamily: "JetBrains Mono, monospace",
-                    fontWeight: 700,
-                  }}
-                >
-                  {s.name}
-                </text>
-              </g>
-            );
-          })}
-
-          <g>
-            <circle
-              cx="200"
-              cy="200"
-              r="55"
-              fill="none"
-              stroke="hsl(var(--primary))"
-              strokeWidth="0.5"
-              opacity="0.12"
-            >
-              <animate
-                attributeName="r"
-                values="55;68;55"
-                dur="4s"
-                repeatCount="indefinite"
-              />
-              <animate
-                attributeName="opacity"
-                values="0.12;0.03;0.12"
-                dur="4s"
-                repeatCount="indefinite"
-              />
-            </circle>
-            <circle
-              cx="200"
-              cy="200"
-              r="28"
-              fill="hsl(var(--card))"
-              stroke="hsl(var(--primary))"
-              strokeWidth="3"
-              filter="url(#glow)"
-            />
-            <text
-              x="200"
-              y="205"
-              textAnchor="middle"
-              fill="hsl(var(--primary))"
-              style={{
-                fontSize: "12px",
-                fontFamily: "JetBrains Mono, monospace",
-                fontWeight: 700,
-                letterSpacing: "0.12em",
-              }}
-            >
-              REPO
-            </text>
-          </g>
-        </svg>
-      </div>
-
-      <div
-        className={`absolute inset-0 flex flex-col items-center justify-center transition-all duration-700 ${gPhase === "score" ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"}`}
-      >
-        <div className="relative w-44 h-44">
-          <svg className="w-full h-full -rotate-90" viewBox="0 0 120 120">
-            <circle
-              cx="60"
-              cy="60"
-              r="52"
-              fill="none"
-              stroke="hsl(var(--border))"
-              strokeWidth="7"
-              opacity="0.3"
-            />
-            <circle
-              cx="60"
-              cy="60"
-              r="52"
-              fill="none"
-              stroke="hsl(var(--primary))"
-              strokeWidth="7"
-              strokeLinecap="round"
-              strokeDasharray={326.73}
-              strokeDashoffset={gPhase === "score" ? 19.6 : 326.73}
-              className="transition-all duration-1200 ease-out"
-            />
-          </svg>
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-4xl font-bold font-display text-foreground tracking-tight">
-              94%
-            </span>
-            <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-[0.2em] mt-1">
-              skill match
-            </span>
-          </div>
-        </div>
-        <p className="mt-6 text-sm text-muted-foreground font-light max-w-50 text-center leading-relaxed">
-          Your profile aligns strongly with{" "}
-          <span className="text-primary font-medium">http</span> and
-          authentication patterns.
-        </p>
-      </div>
-
-      <div className="absolute bottom-5 left-1/2 -translate-x-1/2 transition-all duration-500">
-        {(() => {
-          if (gPhase === "score") {
-            return (
-              <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 backdrop-blur-md">
-                <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                <span className="text-xs font-medium text-primary font-mono tracking-wide">
-                  94% alignment found
-                </span>
-              </div>
-            );
-          } else if (gPhase === "edge") {
-            return (
-              <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-amber-500/10 border border-amber-500/20 backdrop-blur-md">
-                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                <span className="text-xs font-medium text-amber-500 font-mono tracking-wide">
-                  issue #42 selected
-                </span>
-              </div>
-            );
-          } else {
-            return (
-              <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-primary/5 border border-primary/10 backdrop-blur-md">
-                <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                <span className="text-xs font-medium text-primary font-mono tracking-wide">
-                  semantic graph active
-                </span>
-              </div>
-            );
-          }
-        })()}
-      </div>
-    </div>
-  );
-};
-
-const Features = [
-  {
-    title: "Skill",
-    titleAccent: "Graph",
-    lead: "Interactive proficiency mapping.",
-    body: "See exactly how your skills connect to repository needs in real time. No guesswork.",
-    tag: "visual onboarding",
-    icon: (
-      <svg
-        width="22"
-        height="22"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <circle cx="12" cy="5" r="3" />
-        <circle cx="6" cy="12" r="3" />
-        <circle cx="18" cy="12" r="3" />
-        <circle cx="12" cy="19" r="3" />
-        <path d="M12 8v2M9.5 10.5l-1.5 1.5M14.5 10.5l1.5 1.5M12 16v2" />
-      </svg>
-    ),
-  },
-  {
-    title: "Socratic",
-    titleAccent: "Guidance",
-    lead: "Questions, not answers.",
-    body: "The agent probes your understanding until you can explain the fix in your own words.",
-    tag: "never gives solutions",
-    icon: (
-      <svg
-        width="22"
-        height="22"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-      >
-        <circle cx="12" cy="12" r="10" />
-        <path d="M12 16v-4M12 8h.01" />
-      </svg>
-    ),
-  },
-  {
-    title: "Guarded",
-    titleAccent: "Code Assist",
-    lead: "Boilerplate with guardrails.",
-    body: "Stuck? You get three TODO-laden snippets per session. Then it's back to thinking.",
-    tag: "ethical guardrails",
-    icon: (
-      <svg
-        width="22"
-        height="22"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-      >
-        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-      </svg>
-    ),
-  },
-  {
-    title: "Learner",
-    titleAccent: "Profile",
-    lead: "Memory that persists.",
-    body: "Mastered skills are remembered across sessions. You never revisit the same basics twice.",
-    tag: "long‑term memory",
-    icon: (
-      <svg
-        width="22"
-        height="22"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-      >
-        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-        <circle cx="12" cy="7" r="4" />
-      </svg>
-    ),
-  },
-  {
-    title: "Semantic",
-    titleAccent: "Graph",
-    lead: "FAISS-powered matching.",
-    body: "Issues, skills, and PRs are embedded into a living graph that adapts to your interests.",
-    tag: "knowledge graph",
-    icon: (
-      <svg
-        width="22"
-        height="22"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-      >
-        <path d="M18 10a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3ZM6 20a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3Z" />
-        <path d="M9 7h6v2H9zM14.83 14.83 18 17" />
-      </svg>
-    ),
-  },
-  {
-    title: "PR Readiness",
-    titleAccent: "Score",
-    lead: "Review before you push.",
-    body: "Get a novelty check against past PRs and a ready-to-use template before you commit.",
-    tag: "review before code",
-    icon: (
-      <svg
-        width="22"
-        height="22"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-      >
-        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-        <polyline points="22 4 12 14.01 9 11.01" />
-      </svg>
-    ),
-  },
-];
-
-const LandingPage = () => {
-  const scrollContainerRef = useRef(null);
-
-  useEffect(() => {
-    const el = scrollContainerRef.current;
-    if (!el) return;
-
-    let target = el.scrollLeft;
-    let vel = 0;
-    let rafId;
-    let lastTime = performance.now();
-
-    const friction = 0.92;
-    const pull = 0.08;
-
-    function step(now) {
-      const dt = Math.min((now - lastTime) / 16.67, 2);
-      lastTime = now;
-
-      const diff = target - el.scrollLeft;
-      vel += diff * pull * dt;
-      vel *= Math.pow(friction, dt);
-      el.scrollLeft += vel * dt;
-
-      if (Math.abs(vel) > 0.2 || Math.abs(diff) > 0.5) {
-        rafId = requestAnimationFrame(step);
-      }
-    }
-
-    const onWheel = (e) => {
-      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
-        e.preventDefault();
-        const maxScroll = el.scrollWidth - el.clientWidth;
-        target = Math.max(0, Math.min(target + e.deltaY * 1.4, maxScroll));
-        cancelAnimationFrame(rafId);
-        lastTime = performance.now();
-        rafId = requestAnimationFrame(step);
-      }
-    };
-
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => {
-      el.removeEventListener("wheel", onWheel);
-      cancelAnimationFrame(rafId);
-    };
-  }, []);
-
-  const terminalCommand = "repoinsight analyze https://github.com/psf/requests";
-
-  return (
-    <div className="relative min-h-screen bg-background text-foreground overflow-hidden selection:bg-primary/20 selection:text-primary-foreground">
-      <div className="absolute inset-0 bg-linear-to-br from-violet-50/70 via-white/50 to-blue-50/70 dark:from-violet-950/25 dark:via-transparent dark:to-blue-950/20 transition-colors duration-500" />
-      <div className="absolute inset-0 bg-[size:32px_32px] bg-[linear-gradient(to_right,var(--grid-color)_1px,transparent_1px),linear-gradient(to_bottom,var(--grid-color)_1px,transparent_1px)]" />
-      <div className="absolute -top-28 left-1/2 -translate-x-1/2 w-280 h-152 rounded-b-full bg-linear-to-b from-violet-500/30 via-purple-500/18 to-transparent blur-3xl pointer-events-none dark:from-violet-500/25 dark:via-purple-500/15 dark:to-transparent transition-colors duration-500" />
-
-      <header className="fixed top-0 left-0 right-0 z-50 border-b border-border/40 bg-background/70 backdrop-blur-xl transition-colors duration-500">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-linear-to-br from-primary to-violet-600 flex items-center justify-center text-primary-foreground font-bold text-sm font-mono shadow-lg shadow-primary/20">
-              R
-            </div>
-            <span className="font-bold text-base tracking-tight font-display">
-              RepoInsight
-            </span>
+        {/* ── Navigation ── */}
+        <nav className="fixed top-4 left-4 right-4 md:left-8 md:right-8 z-50 flex items-center justify-between px-6 md:px-10 py-4 bg-black/50 border border-white/10 backdrop-blur-xl rounded-2xl">
+          <div className="flex items-center gap-2.5 font-mono text-sm font-black tracking-widest uppercase">
+            <span className="text-white">RepoInsight</span>
           </div>
 
-          <nav className="hidden md:flex items-center gap-8">
+          <div className="hidden md:flex items-center gap-10 font-mono text-[11px] tracking-widest uppercase text-white/70">
             <a
-              href="/"
-              className="text-sm font-semibold text-foreground hover:text-primary transition-colors"
+              href="#how-it-works"
+              className="hover:text-white transition-colors"
             >
-              Home
+              How It Works
+            </a>
+            <a href="#journey" className="hover:text-white transition-colors">
+              Journey
             </a>
             <a
-              href="/chat"
-              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+              href="#architecture"
+              className="hover:text-white transition-colors"
             >
-              Contribute
+              Architecture
             </a>
-            <a
-              href="/profile"
-              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Profile
-            </a>
-          </nav>
+          </div>
 
           <div className="flex items-center gap-3">
-            <Link
-              to="/login"
-              className="hidden sm:inline-flex items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-            >
-              Log in
+            <Link to="/login">
+              <span className="font-mono text-[11px] uppercase tracking-widest hidden sm:inline-block hover:text-white transition-colors text-white/70">
+                Log In
+              </span>
             </Link>
-            <Link
-              to="/signup"
-              className="inline-flex items-center justify-center rounded-lg border border-transparent bg-primary text-primary-foreground text-sm font-semibold shadow-md shadow-primary/15 h-7 px-2.5"
-            >
-              Sign up
+            <Link to="/signup">
+              <Button
+                size="sm"
+                className="font-mono text-[10px] uppercase tracking-widest rounded-full px-5 py-2 transition-all duration-300 bg-[#2541B2] text-white hover:bg-[#1098F7]"
+              >
+                Get Started
+              </Button>
             </Link>
-            <ThemeToggle />
           </div>
-        </div>
-      </header>
+        </nav>
 
-      <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-32 pb-16">
-        <section className="grid lg:grid-cols-2 gap-14 lg:gap-20 items-center mb-32 md:mb-40">
-          <div className="space-y-8">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-primary/8 border border-primary/15 backdrop-blur-sm">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-primary" />
-              </span>
-              <span className="text-[11px] font-mono text-primary font-medium tracking-wide uppercase">
-                v1.0 · Open Source Tutor
-              </span>
-            </div>
-
-            <h1 className="space-y-2">
-              <span className="block text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight leading-[1.05] font-display text-foreground">
-                Learn by doing.
-              </span>
-              <span className="block text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight leading-[1.05] font-display italic bg-linear-to-r from-indigo-600 via-violet-600 to-purple-600 dark:from-indigo-400 dark:via-violet-400 dark:to-purple-400 text-transparent bg-clip-text">
+        {/* ── Hero Section ── */}
+        <main className="relative z-10 max-w-5xl mx-auto px-6 text-center flex flex-col items-center justify-center min-h-screen">
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
+            className="flex flex-col items-center"
+          >
+            <h1 className="text-5xl sm:text-6xl md:text-7xl font-serif font-black tracking-tight leading-[1.08] mb-6 text-white">
+              Learn by doing.
+              <br />
+              <span className="text-[#1098F7] font-serif italic">
                 Not by copying.
               </span>
             </h1>
 
-            <p className="text-lg md:text-xl text-muted-foreground max-w-lg leading-relaxed font-light font-sans">
-              RepoInsight is an AI tutor that guides you through real
-              open‑source issues. Socratic questions, guarded code assists, and
-              a skill graph that grows with you.
+            <p className="max-w-xl text-sm md:text-base opacity-60 leading-relaxed font-sans mb-12">
+              RepoInsight maps your developer taxonomy against real, unassigned
+              GitHub issues — then guides you through understanding with
+              Socratic questioning until you genuinely know the code.
             </p>
 
-            <div className="flex flex-wrap gap-4 pt-2">
-              <Button
-                size="lg"
-                className="shadow-xl shadow-primary/20 hover:shadow-primary/40 hover:scale-105 transition-all duration-200 bg-primary text-primary-foreground h-12 px-8 text-base font-semibold font-display"
-                onClick={() => {
-                  window.location.href = "/chat";
-                }}
-              >
-                Start contributing
-                <svg
-                  className="ml-2 w-5 h-5"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+            <div className="flex items-center gap-4">
+              <Link to="/signup">
+                <Button
+                  size="lg"
+                  className="group font-mono font-bold text-xs tracking-widest uppercase rounded-full px-8 py-6 transition-all duration-300 shadow-xl hover:scale-105 bg-white text-black hover:bg-white/90"
                 >
-                  <path d="M5 12h14M12 5l7 7-7 7" />
-                </svg>
-              </Button>
-              <Button
-                size="lg"
-                variant="outline"
-                className="hover:bg-secondary/80 hover:border-primary/30 transition-all duration-200 h-12 px-8 text-base font-medium font-display"
-                onClick={() =>
-                  document
-                    .getElementById("features")
-                    ?.scrollIntoView({ behavior: "smooth" })
-                }
-              >
-                See how it works
-              </Button>
+                  Start Contributing
+                  <ArrowRight className="w-4 h-4 ml-2 transition-transform group-hover:translate-x-1" />
+                </Button>
+              </Link>
+              <a href="#how-it-works">
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="font-mono text-xs tracking-widest uppercase rounded-full px-6 py-6 border border-white/20 text-white hover:bg-white/5"
+                >
+                  See How It Works
+                </Button>
+              </a>
             </div>
+          </motion.div>
+        </main>
 
-            <div className="pt-2">
-              <div className="inline-flex items-center font-mono text-[13px] text-muted-foreground/90 border border-border/60 rounded-xl px-5 py-3.5 bg-secondary/50 backdrop-blur-sm shadow-sm">
-                <span className="text-primary font-bold mr-2.5 select-none">
-                  $
+        {/* ── How It Works: Horizontal Scroll Section ── */}
+        <section
+          id="how-it-works"
+          className="relative z-10 border-t border-white/5"
+        >
+          <div className="max-w-7xl mx-auto px-6 py-24">
+            <div className="flex items-end justify-between mb-12">
+              <div>
+                <span className="text-[10px] font-mono tracking-[0.15em] uppercase text-[#1098F7] block mb-3">
+                  The Pipeline
                 </span>
-                <TerminalTypewriter text={terminalCommand} delay={65} />
+                <h2 className="text-4xl md:text-5xl font-serif font-black tracking-tight leading-[1.1] text-white">
+                  How It Works
+                </h2>
               </div>
             </div>
-          </div>
 
-          {/* Right Visual */}
-          <div className="relative flex items-center justify-center order-first lg:order-last">
-            <div className="relative w-full max-w-md aspect-square rounded-4xl border border-border/60 bg-card/60 backdrop-blur-2xl shadow-2xl shadow-primary/10 flex flex-col items-center justify-center p-6 overflow-hidden">
-              <SemanticGraph />
-            </div>
-          </div>
-        </section>
-
-        {/* Features */}
-        <section id="features" className="relative mb-32 md:mb-40">
-          <div className="text-center max-w-3xl mx-auto mb-16 md:mb-20 space-y-5">
-            <Badge
-              variant="outline"
-              className="text-[11px] font-mono font-medium tracking-wide uppercase"
-            >
-              Core Philosophy
-            </Badge>
-            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight font-display">
-              Designed for{" "}
-              <span className="bg-linear-to-r from-indigo-600 via-violet-600 to-purple-600 dark:from-indigo-400 dark:via-violet-400 dark:to-purple-400 bg-clip-text text-transparent">
-                real contribution
-              </span>
-            </h2>
-            <p className="text-lg text-muted-foreground font-light font-sans max-w-xl mx-auto">
-              Every feature exists to help you grow — no shortcuts, no
-              spoon‑feeding.
-            </p>
-          </div>
-
-          <div className="relative -mx-4 px-4">
-            <div className="absolute right-0 top-0 bottom-0 w-28 bg-linear-to-l from-background via-background/90 to-transparent z-10 pointer-events-none dark:from-background dark:via-background/95" />
-
+            {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
             <div
               ref={scrollContainerRef}
-              className="flex overflow-x-auto gap-6 pb-10 snap-x snap-mandatory scrollbar-hide -mx-4 px-4"
+              className="flex gap-6 overflow-x-auto pb-8 scrollbar-hide cursor-grab active:cursor-grabbing select-none"
+              style={{
+                scrollbarWidth: "none",
+                msOverflowStyle: "none",
+                scrollBehavior: "smooth",
+              }}
+              onMouseDown={handleMouseDown}
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseUp}
             >
-              {Features.map((feature, idx) => (
-                <Card
+              {howItWorksCards.map((card, idx) => (
+                <div
                   key={idx}
-                  className="min-w-75 md:min-w-[320px] max-w-85 snap-start group relative overflow-hidden transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl hover:shadow-primary/5 border-border/60 bg-card/60 backdrop-blur-md hover:border-primary/25 shrink-0"
+                  className="shrink-0 w-85 md:w-100 snap-start"
+                  style={{ perspective: "1000px" }}
+                  onMouseEnter={() => setFlippedIdx(idx)}
+                  onMouseLeave={() => setFlippedIdx(null)}
                 >
-                  <div className="absolute top-0 left-0 right-0 h-0.5 bg-linear-to-r from-transparent via-primary/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-
-                  <CardHeader className="space-y-5 pb-4">
-                    <div className="flex justify-between items-start">
-                      <div className="w-12 h-12 rounded-xl bg-linear-to-br from-primary/12 to-primary/5 flex items-center justify-center text-primary group-hover:scale-110 transition-transform duration-300 border border-primary/15 shadow-sm">
-                        {feature.icon}
-                      </div>
-                      <span className="text-5xl font-bold text-muted/20 font-display select-none leading-none">
-                        {String(idx + 1).padStart(2, "0")}
-                      </span>
-                    </div>
-
-                    <CardTitle className="font-display text-xl tracking-tight">
-                      <span className="font-light text-muted-foreground">
-                        {feature.title}
-                      </span>{" "}
-                      <span className="font-bold text-foreground">
-                        {feature.titleAccent}
-                      </span>
-                    </CardTitle>
-
-                    <CardDescription>
-                      <div className="space-y-2">
-                        <p className="text-sm font-medium text-foreground font-sans leading-relaxed">
-                          {feature.lead}
+                  <motion.div
+                    initial={{ opacity: 0, y: 30 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, margin: "-50px" }}
+                    transition={{ duration: 0.5, delay: idx * 0.1 }}
+                  >
+                    <div
+                      className="transition-transform duration-700 ease-in-out rounded-2xl border border-white/10 grid [grid-template-areas:'stack'] h-[420px]"
+                      style={{
+                        transformStyle: "preserve-3d",
+                        transform:
+                          flippedIdx === idx
+                            ? "rotateY(180deg)"
+                            : "rotateY(0deg)",
+                      }}
+                    >
+                      <div className="[grid-area:stack] backface-hidden rounded-2xl bg-black p-8">
+                        <div className="flex items-start justify-between mb-8">
+                          <div
+                            className="w-10 h-10 rounded-xl flex items-center justify-center"
+                            style={{
+                              backgroundColor: `${card.accent}18`,
+                              color: card.accent,
+                            }}
+                          >
+                            {card.icon}
+                          </div>
+                          <span
+                            className="text-5xl font-black font-mono opacity-40"
+                            style={{ color: card.accent }}
+                          >
+                            {card.num}
+                          </span>
+                        </div>
+                        <div className="mb-2">
+                          <span
+                            className="text-[10px] font-mono tracking-widest uppercase opacity-60"
+                            style={{ color: card.accent }}
+                          >
+                            {card.subtitle}
+                          </span>
+                        </div>
+                        <h3 className="text-xl font-serif font-bold mb-4 leading-tight text-white">
+                          {card.title}
+                        </h3>
+                        <p className="text-sm text-white/50 leading-relaxed font-sans">
+                          Hover to explore &rarr;
                         </p>
-                        <p className="text-sm leading-relaxed text-muted-foreground/90 font-light font-sans">
-                          {feature.body}
-                        </p>
                       </div>
-                    </CardDescription>
-                  </CardHeader>
-
-                  <CardContent>
-                    <div className="text-[11px] font-mono text-muted-foreground/60 border-t border-border/50 pt-3 flex justify-between items-center uppercase tracking-widest">
-                      <span>{feature.tag}</span>
-                      <span className="opacity-0 group-hover:opacity-100 transition-all duration-300 text-primary transform group-hover:translate-x-1">
-                        →
-                      </span>
+                      <div
+                        className="[grid-area:stack] backface-hidden rounded-2xl bg-white p-8"
+                        style={{ transform: "rotateY(180deg)" }}
+                      >
+                        <div className="flex items-start justify-between mb-6">
+                          <div
+                            className="w-10 h-10 rounded-xl flex items-center justify-center"
+                            style={{
+                              backgroundColor: `${card.accent}15`,
+                              color: card.accent,
+                            }}
+                          >
+                            {card.icon}
+                          </div>
+                          <span
+                            className="text-3xl font-black font-mono opacity-20"
+                            style={{ color: card.accent }}
+                          >
+                            {card.num}
+                          </span>
+                        </div>
+                        <p className="text-sm text-black/80 leading-relaxed font-sans mb-6">
+                          {card.description}
+                        </p>
+                        <div className="flex items-baseline gap-2">
+                          <span
+                            className="text-3xl font-bold font-serif"
+                            style={{ color: card.accent }}
+                          >
+                            {card.stat}
+                          </span>
+                          <span className="text-[10px] font-mono uppercase tracking-widest text-black/40">
+                            {card.statLabel}
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                  </CardContent>
-                </Card>
+                  </motion.div>
+                </div>
               ))}
             </div>
-
-            <div className="text-center mt-4">
-              <p className="text-[11px] text-muted-foreground/50 font-mono tracking-widest uppercase animate-pulse">
-                ← Swipe to explore →
-              </p>
-            </div>
           </div>
         </section>
 
-        <section className="mb-16">
-          <div className="relative rounded-4xl border border-border/40 bg-linear-to-r from-primary/5 via-violet-500/5 to-blue-500/5 backdrop-blur-sm p-10 md:p-20 text-center overflow-hidden">
-            <div className="absolute inset-0 bg-linear-to-br from-primary/5 via-transparent to-blue-500/5" />
-
-            <div className="relative z-10 max-w-2xl mx-auto space-y-7">
-              <h3 className="text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight font-display">
-                Ready to contribute?
-              </h3>
-              <p className="text-lg text-muted-foreground font-light font-sans">
-                Join the next generation of open‑source contributors who learn
-                by building.
+        {/* ── Your Learning Journey ── */}
+        <section id="journey" className="relative z-10 border-t border-white/5">
+          <div className="max-w-6xl mx-auto px-6 py-24">
+            <div className="mb-16">
+              <span className="text-[10px] font-mono tracking-[0.15em] uppercase text-[#1098F7] block mb-3">
+                The Path
+              </span>
+              <h2 className="text-3xl md:text-4xl font-serif font-bold tracking-tight leading-[1.15] text-white">
+                Your Learning Journey
+              </h2>
+              <p className="text-sm mt-3 font-sans max-w-lg leading-relaxed text-white/50">
+                From discovering your first issue to building a portfolio of
+                meaningful contributions — every stage is guided.
               </p>
-              <Button
-                className="shadow-xl shadow-primary/20 hover:shadow-primary/40 hover:scale-105 transition-all duration-200 h-12 px-8 text-base font-semibold font-display"
-                size="lg"
-                onClick={() => {
-                  window.location.href = "/chat";
-                }}
-              >
-                Start your journey
-                <svg
-                  className="ml-2 w-4 h-4"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+            </div>
+
+            <div className="space-y-16">
+              {[
+                {
+                  num: "01",
+                  title: "Discover",
+                  desc: "Your developer profile is embedded into a vector space and matched against live GitHub issues. You see only what fits your current skills — no noise, no irrelevant suggestions.",
+                  highlight: "Skill-issue alignment",
+                  color: "#2541B2",
+                },
+                {
+                  num: "02",
+                  title: "Understand",
+                  desc: "The AI never writes code for you. Instead, it questions your approach, forces you to reason about the codebase, and only advances you once genuine understanding is demonstrated.",
+                  highlight: "Socratic verification",
+                  color: "#1098F7",
+                },
+                {
+                  num: "03",
+                  title: "Contribute",
+                  desc: "Submit your first pull request with confidence. The system provides structured PR outlines and readiness reviews based on your session history and verified understanding.",
+                  highlight: "Guided PR submission",
+                  color: "#56E39F",
+                },
+                {
+                  num: "04",
+                  title: "Grow",
+                  desc: "Skills decay and grow based on demonstrated understanding, not completion. Your profile evolves as you contribute more, opening doors to increasingly complex challenges.",
+                  highlight: "Persistent skill graph",
+                  color: "#2541B2",
+                },
+              ].map((step, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, y: 30 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.6, delay: i * 0.1 }}
+                  className={`flex flex-col md:flex-row ${
+                    i % 2 === 1 ? "md:flex-row-reverse" : ""
+                  } items-start gap-8 md:gap-16`}
                 >
-                  <path d="M5 12h14M12 5l7 7-7 7" />
-                </svg>
-              </Button>
+                  <div className="flex-1">
+                    <span
+                      className="text-[10px] font-mono tracking-[0.15em] uppercase block mb-3"
+                      style={{ color: step.color }}
+                    >
+                      {step.highlight}
+                    </span>
+                    <h3 className="text-2xl md:text-3xl font-serif font-bold mb-4 leading-tight text-white">
+                      {step.title}
+                    </h3>
+                    <p className="text-sm leading-relaxed font-sans text-white/60">
+                      {step.desc}
+                    </p>
+                  </div>
+                  <div
+                    className="flex-none w-16 h-16 rounded-2xl flex items-center justify-center"
+                    style={{ backgroundColor: `${step.color}18` }}
+                  >
+                    <span
+                      className="text-2xl font-serif font-black"
+                      style={{ color: step.color }}
+                    >
+                      {step.num}
+                    </span>
+                  </div>
+                </motion.div>
+              ))}
             </div>
           </div>
         </section>
 
-        <footer className="pt-10 border-t border-border/30 text-center space-y-3">
-          <p className="text-sm text-muted-foreground/60 font-mono">
-            Built with Django, Celery, FAISS, LangGraph & shadcn/ui
-          </p>
-          <p className="text-xs text-muted-foreground/50 font-mono tracking-wide">
-            No code spoon‑feeding · Socratic guidance · Ethical guardrails
-          </p>
+        {/* ── Architecture CTA ── */}
+        <section
+          id="architecture"
+          className="relative z-10 border-t border-white/5"
+        >
+          <div className="max-w-4xl mx-auto px-6 py-24 text-center">
+            <span className="text-[10px] font-mono tracking-[0.15em] uppercase text-[#56E39F] block mb-3">
+              System Architecture
+            </span>
+            <h2 className="text-3xl md:text-5xl font-display font-bold tracking-tight mb-6 text-white">
+              React · Django · PostgreSQL · Redis
+            </h2>
+            <p className="text-sm leading-relaxed font-sans max-w-2xl mx-auto mb-10 opacity-70">
+              A modern stack powering FAISS-powered semantic search, async
+              Celery workers, LangGraph agent orchestration, and real-time
+              Socratic tutoring with Groq / Cloudflare inference — all wrapped
+              in a polished Vite + Tailwind frontend.
+            </p>
+            <Link to="/signup">
+              <Button
+                size="lg"
+                className="group font-mono font-bold text-xs tracking-widest uppercase rounded-full px-8 py-6 transition-all duration-300 shadow-xl hover:scale-105 bg-[#56E39F] text-black hover:bg-[#56E39F]/90"
+              >
+                Initialize Your Profile
+                <ChevronRight className="w-4 h-4 ml-2 transition-transform group-hover:translate-x-1" />
+              </Button>
+            </Link>
+          </div>
+        </section>
+
+        {/* ── Footer ── */}
+        <footer className="relative z-10 border-t border-white/5 py-12">
+          <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-2 font-mono text-xs tracking-widest uppercase text-white/40">
+              <span>RepoInsight</span>
+            </div>
+            <div className="flex items-center gap-6 text-[10px] font-mono tracking-widest uppercase text-white/30">
+              <span>Django</span>
+              <span>Celery</span>
+              <span>FAISS</span>
+              <span>LangGraph</span>
+              <span>Tailwind</span>
+            </div>
+            <div className="flex items-center gap-4 text-[11px] font-mono tracking-widest uppercase text-white/30">
+              <span className="hover:text-white transition-colors cursor-pointer">
+                Portfolio
+              </span>
+              <span className="text-white/10">/</span>
+              <span className="hover:text-white transition-colors cursor-pointer">
+                LinkedIn
+              </span>
+            </div>
+          </div>
         </footer>
-      </main>
+      </div>
     </div>
   );
-};
-
-export default LandingPage;
+}

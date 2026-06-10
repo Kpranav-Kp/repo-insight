@@ -114,21 +114,42 @@ class RecommendationEngine:
         scored = []
         for cand in candidates:
             issue_id = cand["id"]
-            issue_skills = set(cand.get("skills", []))
+            issue_skills = set(s.lower() for s in cand.get("skills", []))
+            semantic_score = float(cand.get("score", 0))
+
+            overlap_skills = user_skills_set & issue_skills
             if issue_skills:
-                skill_overlap = len(user_skills_set & issue_skills) / len(issue_skills)
+                skill_overlap = len(overlap_skills) / len(issue_skills)
+                user_coverage = (
+                    len(overlap_skills) / len(user_skills_set)
+                    if user_skills_set
+                    else 0.0
+                )
             else:
                 skill_overlap = 0.0
+                user_coverage = 0.0
 
             difficulty_score = self.graph.get_issue_difficulty_score(issue_id)
             label_bonus = self.graph.get_issue_label_bonus(issue_id)
+            normalized_label = label_bonus / 0.3 if label_bonus else 0.0
+
+            # Blend metadata overlap with semantic retrieval when skills are sparse
+            skill_component = skill_overlap if issue_skills else semantic_score
+            coverage_component = user_coverage if issue_skills else semantic_score * 0.5
 
             final_score = (
-                0.6 * skill_overlap + 0.2 * difficulty_score + 0.2 * label_bonus
+                0.30 * skill_component
+                + 0.30 * semantic_score
+                + 0.20 * coverage_component
+                + 0.10 * difficulty_score
+                + 0.10 * normalized_label
             )
 
-            cand["skill_overlap"] = sorted(user_skills_set & issue_skills)
-            cand["match_score"] = round(skill_overlap, 4)
+            cand["skill_overlap"] = sorted(overlap_skills)
+            cand["match_score"] = round(
+                skill_overlap if issue_skills else semantic_score, 4
+            )
+            cand["semantic_score"] = round(semantic_score, 4)
             cand["difficulty_score"] = difficulty_score
             cand["label_bonus"] = label_bonus
             cand["combined_score"] = round(final_score, 4)

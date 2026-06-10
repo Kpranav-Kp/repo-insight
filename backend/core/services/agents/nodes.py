@@ -178,168 +178,204 @@ def guidance_node(state: AgentState) -> AgentState:
     Socratic loop — never gives code.
 
     Flow:
-      1. Check for skill gaps → provide learning path if gaps exist.
-      2. Ask a targeted understanding question.
-      3. Evaluate the user's answer.
-         - INSUFFICIENT → increment stuck_counter; if >=2 or user asks "stuck/hint", go to code_assist.
-         - SUFFICIENT + genuine → advance to review.
-         - SUFFICIENT + vibe-coded → ask a more specific follow-up.
+      1. If first selected (trigger is "Let's start working on this issue." or no assistant guidance yet):
+         Provide file structure, goals, and roadmap.
+      2. If user explicitly asks for code assistance:
+         Transition to code_assist node.
+      3. Classify message:
+         - QUESTION/CLARIFICATION -> Answer conceptually without code, break down.
+         - ANSWER -> Evaluate understanding:
+           - SUFFICIENT & genuine -> Transition to review node.
+           - INSUFFICIENT -> Ask follow-up question, increment stuck_counter. Do NOT transition to code_assist automatically.
     """
     messages = state.get("messages") or []
     selected_issue = state.get("selected_issue") or {}
     repo_url = state.get("repo_url", "")
-    repo_id = state.get("repo_id")
     user_skills_list = [s["skill"] for s in (state.get("user_skills") or [])]
-    issue_skills = selected_issue.get("skills") or []
 
     last = _last_user_message(messages)
 
-    if last:
-        evaluation = llm_respond(
+    # 1. Check if first guidance execution
+    is_initial_guidance = False
+    if last == "Let's start working on this issue.":
+        is_initial_guidance = True
+    else:
+        # Check if there is already an assistant message that started guidance
+        has_guidance = any(
+            m.get("role") == "assistant"
+            and (
+                "roadmap" in m.get("content", "").lower()
+                or "file structure" in m.get("content", "").lower()
+            )
+            for m in messages[:-1]
+        )
+        if not has_guidance:
+            is_initial_guidance = True
+
+    if is_initial_guidance:
+        # Generate initial roadmap and codebase explanation without code
+        prompt = f"""
+        You are an open source mentor guiding a contributor who just selected this issue.
+        Issue: {json.dumps(selected_issue)}
+        Repository: {repo_url}
+        User's Skills: {user_skills_list}
+
+        Provide a structured guidance response containing:
+        1. A complete explanation of the file structure of the codebase (highlighting directories and files that are relevant to this issue).
+        2. A clear explanation of what the issue expects the contributor to solve.
+        3. The goal of the resolution once the issue is solved.
+        4. A step-by-step roadmap that breaks down this bigger problem into smaller, bite-sized tasks to guide the contributor.
+
+        CRITICAL RULES:
+        - DO NOT provide any code snippets or code syntax. Focus purely on conceptual roadmap, file structure, and goals.
+        - Encourage the user to examine the files and ask where they should start or if they have questions.
+        - Format the response using clean, easy-to-read markdown.
+        """
+        reply = llm_respond(prompt, messages)
+        return {
+            **state,
+            "messages": _assistant(messages, reply),
+            "conversation_phase": "guidance",
+        }
+
+    # 2. Check if user explicitly asked for code assistance
+    asked_for_code = any(
+        kw in last.lower()
+        for kw in [
+            "code",
+            "snippet",
+            "boilerplate",
+            "example code",
+            "write",
+            "code assist",
+        ]
+    )
+    if asked_for_code:
+        return {
+            **state,
+            "conversation_phase": "code_assist",
+        }
+
+    # 3. Classify if the user is answering our question or asking their own question/clarification
+    classification = llm_respond(
+        f"""
+        User message: "{last}"
+
+        Is the user attempting to answer a question or explain their approach/understanding of the fix?
+        Or are they asking a question, asking for clarification, or requesting conceptual guidance?
+
+        Reply ONLY with: ANSWER or QUESTION
+        """,
+        messages,
+    ).upper()
+
+    if "QUESTION" in classification:
+        prompt = f"""
+        The user has asked a question or requested guidance regarding the issue.
+        Issue: {json.dumps(selected_issue)}
+        Repository: {repo_url}
+        User's message: "{last}"
+
+        Answer their question conceptually and guide them forward.
+        - DO NOT provide any code snippets.
+        - Break down the problem further into smaller sub-problems.
+        - Suggest where in the codebase they should look (directories/files) but let them figure out the logic.
+        """
+        reply = llm_respond(prompt, messages)
+        return {
+            **state,
+            "messages": _assistant(messages, reply),
+            "conversation_phase": "guidance",
+        }
+
+    # 4. Process user's answer / explanation
+    evaluation = llm_respond(
+        f"""
+        Issue context (JSON): {json.dumps(selected_issue)}
+        User's answer: "{last}"
+
+        Does this answer show SPECIFIC understanding of the issue?
+
+        SUFFICIENT means:
+          - References the actual problem described in the issue
+          - Shows understanding of why the bug/problem happens
+          - Suggests a general direction (not code)
+
+        INSUFFICIENT means:
+          - Vague or generic — could apply to any issue
+          - No reference to the specific codebase or file
+          - Reads like AI-generated boilerplate
+
+        Reply with ONLY: SUFFICIENT  OR  INSUFFICIENT
+        """,
+        messages,
+    ).upper()
+
+    state = {**state, "understanding_score": evaluation}
+
+    if evaluation == "SUFFICIENT":
+        vibe_check = llm_respond(
             f"""
-            Issue context (JSON): {json.dumps(selected_issue)}
-            User's answer: "{last}"
+            User's explanation: "{last}"
 
-            Does this answer show SPECIFIC understanding of the issue?
+            Does this read like:
+            A) A genuine developer response with specific, concrete details
+            B) Generic AI-generated text with no real specifics
 
-            SUFFICIENT means:
-              - References the actual problem described in the issue
-              - Shows understanding of why the bug/problem happens
-              - Suggests a general direction (not code)
-
-            INSUFFICIENT means:
-              - Vague or generic — could apply to any issue
-              - No reference to the specific codebase or file
-              - Reads like AI-generated boilerplate
-
-            Reply with ONLY: SUFFICIENT  OR  INSUFFICIENT
+            Reply ONLY: genuine  OR  vibe_coded
             """,
             messages,
-        ).upper()
+        ).lower()
 
-        state = {**state, "understanding_score": evaluation}
-
-        if evaluation == "SUFFICIENT":
-            vibe_check = llm_respond(
-                f"""
-                User's explanation: "{last}"
-
-                Does this read like:
-                A) A genuine developer response with specific, concrete details
-                B) Generic AI-generated text with no real specifics
-
-                Reply ONLY: genuine  OR  vibe_coded
-                """,
-                messages,
-            ).lower()
-
-            if "genuine" in vibe_check:
-                reply = (
-                    "Great understanding! 🎉 Let me check your approach against "
-                    "the repo's contributing guidelines."
-                )
-                return {
-                    **state,
-                    "messages": _assistant(messages, reply),
-                    "conversation_phase": "review",
-                }
-            else:
-                reply = llm_respond(
-                    f"""
-                    The user's answer seems too generic or AI-generated.
-                    Issue: {json.dumps(selected_issue)}
-
-                    Ask one very specific follow-up question that requires them to reference
-                    an actual file name, function, or line of behaviour from the codebase.
-                    Do NOT provide any code or hints.
-                    """,
-                    messages,
-                )
-                return {
-                    **state,
-                    "messages": _assistant(messages, reply),
-                    "conversation_phase": "guidance",
-                }
-
-        stuck = state.get("stuck_counter", 0) + 1
-        if stuck >= 2 or "stuck" in last.lower() or "hint" in last.lower():
+        if "genuine" in vibe_check:
+            reply = (
+                "Great understanding! 🎉 Let me check your approach against "
+                "the repo's contributing guidelines."
+            )
             return {
                 **state,
-                "stuck_counter": stuck,
-                "conversation_phase": "code_assist",
+                "messages": _assistant(messages, reply),
+                "conversation_phase": "review",
             }
         else:
             reply = llm_respond(
                 f"""
+                The user's answer seems too generic or AI-generated.
                 Issue: {json.dumps(selected_issue)}
-                User's answer: "{last}"
 
-                Their answer was too vague. Ask ONE targeted follow-up question that pushes
-                them to think about:
-                  - The specific file or module involved
-                  - The root cause of the problem
-                Do NOT give any code or reveal the answer.
+                Ask one very specific follow-up question that requires them to reference
+                an actual file name, function, or line of behaviour from the codebase.
+                Do NOT provide any code or hints.
                 """,
                 messages,
             )
             return {
                 **state,
-                "stuck_counter": stuck,
                 "messages": _assistant(messages, reply),
                 "conversation_phase": "guidance",
             }
 
-    gaps = [s for s in issue_skills if s not in user_skills_list]
-    if gaps:
-        learning_path = llm_respond(
-            f"""
-            Developer knows: {user_skills_list}
-            Issue requires : {issue_skills}
-            Skill gaps     : {gaps}
-
-            Create a concise learning path for each gap:
-              - One concept to understand
-              - One real resource URL (if you know a reliable one)
-              - One small hands-on exercise
-              - Estimated time
-
-            No code. No solutions. End with: 'Come back after going through these!'
-            """,
-            messages,
-        )
-        return {
-            **state,
-            "messages": _assistant(messages, learning_path),
-            "conversation_phase": "guidance",
-        }
-
-    guidelines_context = ""
-    try:
-        repo = Repository.objects.get(id=repo_id)
-        guidelines_context = repo.contributing_guidelines
-    except Exception as e:
-        logger.warning("Could not fetch guidelines: %s", e)
-        guidelines_context = ""
+    # If answer is INSUFFICIENT, increment stuck counter
+    stuck = state.get("stuck_counter", 0) + 1
 
     reply = llm_respond(
         f"""
-        Issue (JSON): {json.dumps(selected_issue)}
-        Repository  : {repo_url}
-        Guidelines  : {guidelines_context[:500] if guidelines_context else "N/A"}
+        Issue: {json.dumps(selected_issue)}
+        User's answer: "{last}"
 
-        Ask the user ONE specific question to check their understanding of this issue.
-        The question should make them think about:
-          - What is actually causing the problem
-          - Where in the codebase the fix would live
+        Their answer was too vague. Ask ONE targeted follow-up question that pushes
+        them to think about:
+          - The specific file or module involved
+          - The root cause of the problem
 
-        Do NOT give any code.
-        Do NOT hint at the answer.
-        Point them to WHERE to look, not WHAT to write.
+        Do NOT give any code or reveal the answer.
+        At the end of your response, mention that if they feel stuck and want code assistance, they can explicitly ask for it (e.g. "show me code" or "give me boilerplate").
         """,
         messages,
     )
     return {
         **state,
+        "stuck_counter": stuck,
         "messages": _assistant(messages, reply),
         "conversation_phase": "guidance",
     }

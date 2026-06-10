@@ -131,11 +131,15 @@ def extract_issue_metadata(title: str, body: str, labels: list[str]) -> dict:
     text = f"{title} {body}"
     skills = extractor.extract(text)
 
+    text_lower = text.lower()
+    for phrase in ("github actions", "gitlab ci", "ci/cd"):
+        if phrase in text_lower:
+            skills.append(phrase)
+    skills = sorted(set(skills))
+
     difficulty = "intermediate"
 
     label_lower = [label.lower() for label in labels]
-    text_lower = text.lower()
-
     beginner_labels = {"good first issue", "beginner", "easy", "help wanted"}
     beginner_keywords = {
         "typo",

@@ -49,16 +49,46 @@ def route_after_guidance(state: AgentState) -> str:
     return "guidance"
 
 
+def router_node(state: AgentState) -> AgentState:
+    return state
+
+
+def route_entry(state: AgentState) -> str:
+    phase = state.get("conversation_phase", "onboarding")
+    if phase == "complete":
+        return END
+    if phase == "review":
+        return "review"
+    if phase in ("guidance",) or state.get("selected_issue"):
+        return "guidance"
+    if state.get("user_skills"):
+        return "issue_analysis"
+    return "onboarding"
+
+
 def build_graph():
     graph = StateGraph(AgentState)
 
+    graph.add_node("router", router_node)
     graph.add_node("onboarding", onboarding_node)
     graph.add_node("issue_analysis", issue_analysis_node)
     graph.add_node("guidance", guidance_node)
     graph.add_node("code_assist", code_assist_node)
     graph.add_node("review", review_node)
 
-    graph.set_entry_point("onboarding")
+    graph.set_entry_point("router")
+
+    graph.add_conditional_edges(
+        "router",
+        route_entry,
+        {
+            "onboarding": "onboarding",
+            "issue_analysis": "issue_analysis",
+            "guidance": "guidance",
+            "review": "review",
+            END: END,
+        },
+    )
 
     graph.add_conditional_edges(
         "onboarding",
@@ -92,7 +122,7 @@ def build_graph():
         },
     )
 
-    graph.add_edge("code_assist", "guidance")
+    graph.add_edge("code_assist", END)
     graph.add_edge("review", END)
 
     return graph.compile()

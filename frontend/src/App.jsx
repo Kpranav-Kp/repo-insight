@@ -7,6 +7,8 @@ import {
   useNavigate,
 } from "react-router-dom";
 
+import { ThemeProvider } from "@/components/ThemeToggle";
+
 import ChatPage from "./components/ChatPage";
 import LandingPage from "./components/LandingPage";
 import Login from "./components/Login";
@@ -31,7 +33,7 @@ function ProtectedRoute({ children }) {
   return children;
 }
 
-function App() {
+function AppRoutes() {
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -58,10 +60,12 @@ function App() {
   );
 }
 
-export default function Root() {
+export default function App() {
   return (
-    <Router>
-      <App />
-    </Router>
+    <ThemeProvider>
+      <Router>
+        <AppRoutes />
+      </Router>
+    </ThemeProvider>
   );
 }

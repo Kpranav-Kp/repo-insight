@@ -1,10 +1,11 @@
 // frontend/src/components/chat/CurrentSession.jsx
-import { Send, Loader2, Check, Copy } from "lucide-react";
+import { Send, Loader2, Check, Copy, ThumbsUp, ThumbsDown } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
 
+import { useTheme } from "@/components/ThemeToggle";
 import { api, poll } from "@/lib/api";
 import { upsertSession, newLocalId } from "@/lib/sessionStore";
 import { cn } from "@/lib/utils";
@@ -16,6 +17,8 @@ const WELCOME = {
 };
 
 export function CurrentSession({ activeSession }) {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
   const [stage, setStage] = useState(
     activeSession?.sessionId ? "ready" : "idle",
   );
@@ -30,7 +33,10 @@ export function CurrentSession({ activeSession }) {
   const [error, setError] = useState(null);
   const [repoSkills, setRepoSkills] = useState([]);
   const [selectedSkills, setSelectedSkills] = useState([]);
-  const [recommendations, setRecommendations] = useState([]);
+  const [selectedIssueId, setSelectedIssueId] = useState(
+    activeSession?.selectedIssueId || null,
+  );
+  const [_, setRecommendations] = useState([]);
   const localIdRef = useRef(activeSession?.localId ?? newLocalId());
   const scrollRef = useRef(null);
   const textareaRef = useRef(null);
@@ -51,9 +57,10 @@ export function CurrentSession({ activeSession }) {
       sessionId,
       phase,
       messages,
+      selectedIssueId,
       updatedAt: Date.now(),
     });
-  }, [repoUrl, repoLabel, sessionId, phase, messages]);
+  }, [repoUrl, repoLabel, sessionId, phase, messages, selectedIssueId]);
 
   const repoNameFromUrl = (url) =>
     url.replace(/\.git$/, "").replace(/^https?:\/\/github\.com\//, "");
@@ -90,10 +97,9 @@ export function CurrentSession({ activeSession }) {
       const session = await api.createSession(repoId);
       setSessionId(session.id);
       setRepoSkills(repo.skills_found || []);
-      setStage("skills"); // ✅ move to skill selection (not overwritten later)
+      setStage("skills");
       setPhase(session.phase || "onboarding");
 
-      // Remove the pending analysis message and add a neutral "analysis complete" message
       setMessages((m) => {
         const copy = [...m];
         if (copy[copy.length - 1]?.pending) copy.pop();
@@ -116,15 +122,12 @@ export function CurrentSession({ activeSession }) {
     }
   };
 
-  // Submit structured skills and fetch recommendations
   const submitSkillsAndGetRecommendations = async () => {
     if (selectedSkills.length === 0) return;
     setStage("thinking");
     setError(null);
     try {
-      // 1. Save skills to session
       await api.submitStructuredSkills(sessionId, selectedSkills);
-      // 2. Fetch recommendations from backend (deterministic ranking)
       const recs = await api.getRecommendations(sessionId);
 
       if (recs.recommendations && recs.recommendations.length > 0) {
@@ -134,10 +137,10 @@ export function CurrentSession({ activeSession }) {
           {
             role: "ai",
             content: `Great! I found ${recs.recommendations.length} issues that match your skills. Select one to start working.`,
+            recommendations: recs.recommendations,
           },
         ]);
       } else if (recs.learning_path) {
-        // No matching issues - show learning path
         setRecommendations([]);
         setMessages((prev) => [
           ...prev,
@@ -153,25 +156,21 @@ export function CurrentSession({ activeSession }) {
     }
   };
 
-  // User selects an issue from the card
   const selectIssue = async (issue) => {
     setError(null);
     try {
-      // Store selected issue in backend
       await api.selectIssue(sessionId, issue);
+      setSelectedIssueId(issue.id);
       setStage("thinking");
 
-      // Add user message and get agent response
       const userMessage = `I'll work on issue #${issue.id}: ${issue.title}`;
       setMessages((prev) => [...prev, { role: "user", content: userMessage }]);
 
-      // Send message to trigger guidance phase
       const accepted = await api.sendMessage(
         sessionId,
         "Let's start working on this issue.",
       );
 
-      // Poll for agent response
       const result = await poll(
         () => api.chatResult(accepted.task_id),
         (r) => r.status === "done",
@@ -255,17 +254,52 @@ export function CurrentSession({ activeSession }) {
     if (textareaRef.current) textareaRef.current.style.height = "40px";
     if (stage === "idle") startRepo(text);
     else if (stage === "ready") sendChat(text);
-    // Other stages (skills, recommendations) have their own buttons, not the main input.
   };
+
   const getDifficultyClass = (difficulty) => {
     if (difficulty === "beginner") {
-      return "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300";
+      return isDark
+        ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/20"
+        : "bg-emerald-50 text-emerald-700 border border-emerald-200";
     }
     if (difficulty === "advanced") {
-      return "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300";
+      return isDark
+        ? "bg-red-500/15 text-red-400 border border-red-500/20"
+        : "bg-red-50 text-red-700 border border-red-200";
     }
-    return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300";
+    return isDark
+      ? "bg-amber-500/15 text-amber-400 border border-amber-500/20"
+      : "bg-amber-50 text-amber-700 border border-amber-200";
   };
+
+  const getButtonDisabledState = (isThisSelected, hasAnySelected) => {
+    if (isThisSelected) return true;
+    if (hasAnySelected) return true;
+    return false;
+  };
+
+  const getButtonClassName = (isThisSelected, hasAnySelected) => {
+    if (isThisSelected) {
+      return isDark
+        ? "w-full py-2 text-xs font-semibold rounded-xl transition-all bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 cursor-default"
+        : "w-full py-2 text-xs font-semibold rounded-xl transition-all bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-default";
+    }
+    if (hasAnySelected) {
+      return isDark
+        ? "w-full py-2 text-xs font-semibold rounded-xl transition-all bg-white/5 text-white/20 border border-white/10 cursor-not-allowed"
+        : "w-full py-2 text-xs font-semibold rounded-xl transition-all bg-black/5 text-black/20 border border-black/10 cursor-not-allowed";
+    }
+    return isDark
+      ? "w-full py-2 text-xs font-semibold rounded-xl transition-all bg-[#2541B2] text-white hover:bg-[#1098F7] cursor-pointer"
+      : "w-full py-2 text-xs font-semibold rounded-xl transition-all bg-[#2541B2] text-white hover:bg-[#1098F7] cursor-pointer";
+  };
+
+  const getButtonText = (isThisSelected, hasAnySelected) => {
+    if (isThisSelected) return "Selected";
+    if (hasAnySelected) return "Unavailable";
+    return "Select This Issue";
+  };
+
   const busy = stage === "analyzing" || stage === "thinking";
   const isInitial = stage === "idle" && messages.length <= 1;
   let placeholderText = "Type a message...";
@@ -282,9 +316,15 @@ export function CurrentSession({ activeSession }) {
   else if (stage === "recommendations") statusText = "recommendations";
 
   const InputArea = (
-    <div className="border-t border-gray-200 dark:border-gray-800 bg-background p-4">
+    <div
+      className={`border-t p-4 ${isDark ? "border-white/6" : "border-black/6"}`}
+    >
       {error && <p className="mb-2 text-xs text-red-500">{error}</p>}
-      <div className="flex items-end gap-2 rounded-xl border border-gray-200 dark:border-gray-800 bg-card transition-colors focus-within:border-primary p-2">
+      <div
+        className={`flex items-end gap-2 rounded-2xl border p-2 transition-colors focus-within:border-[#2541B2] ${
+          isDark ? "border-white/8 bg-white/3" : "border-black/8 bg-black/2"
+        }`}
+      >
         <textarea
           ref={textareaRef}
           value={input}
@@ -302,7 +342,11 @@ export function CurrentSession({ activeSession }) {
           }}
           placeholder={placeholderText}
           rows={1}
-          className="flex-1 resize-none bg-transparent px-2 py-1.5 text-sm text-foreground placeholder:text-muted-foreground outline-none disabled:opacity-60"
+          className={`flex-1 resize-none bg-transparent px-3 py-2.5 text-sm outline-none disabled:opacity-50 ${
+            isDark
+              ? "text-white placeholder:text-white/25"
+              : "text-black placeholder:text-black/25"
+          }`}
           style={{ height: 40, maxHeight: 160 }}
         />
         <button
@@ -311,7 +355,9 @@ export function CurrentSession({ activeSession }) {
             busy || (stage !== "ready" && stage !== "idle") || !input.trim()
           }
           aria-label="Send"
-          className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white shadow-md transition-transform hover:scale-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+          className={`flex h-8 w-8 items-center justify-center rounded-xl transition-all hover:scale-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 ${
+            isDark ? "bg-white text-black" : "bg-[#000000] text-white"
+          }`}
         >
           {busy ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -328,9 +374,19 @@ export function CurrentSession({ activeSession }) {
     return (
       <div className="flex h-full flex-col">
         <div className="flex-1 overflow-y-auto p-6">
-          <div className="max-w-2xl mx-auto bg-card rounded-xl border border-gray-200 dark:border-gray-800 p-6 space-y-6">
-            <h3 className="text-xl font-display font-bold">Your Skills</h3>
-            <p className="text-sm text-muted-foreground">
+          <div
+            className={`max-w-2xl mx-auto rounded-2xl border p-6 space-y-6 ${
+              isDark ? "bg-white/2 border-white/6" : "bg-white border-black/6"
+            }`}
+          >
+            <h3
+              className={`text-xl font-bold ${isDark ? "text-white" : "text-black"}`}
+            >
+              Your Skills
+            </h3>
+            <p
+              className={`text-sm ${isDark ? "text-white/50" : "text-black/50"}`}
+            >
               Select the skills you have and your proficiency level.
             </p>
             <div className="space-y-4">
@@ -339,7 +395,11 @@ export function CurrentSession({ activeSession }) {
                   key={skill}
                   className="flex items-center justify-between gap-4"
                 >
-                  <span className="text-sm font-medium w-32">{skill}</span>
+                  <span
+                    className={`text-sm font-medium w-32 ${isDark ? "text-white" : "text-black"}`}
+                  >
+                    {skill}
+                  </span>
                   <div className="flex gap-2">
                     {["beginner", "intermediate", "advanced"].map((band) => (
                       <button
@@ -361,12 +421,16 @@ export function CurrentSession({ activeSession }) {
                             ]);
                           }
                         }}
-                        className={`px-3 py-1 text-xs rounded-full border transition-colors ${
+                        className={`px-3 py-1 text-xs rounded-full border font-medium transition-all cursor-pointer ${
                           selectedSkills.some(
                             (s) => s.skill === skill && s.band === band,
                           )
-                            ? "bg-primary text-primary-foreground border-primary"
-                            : "bg-background text-foreground border-gray-300 dark:border-gray-700 hover:bg-secondary"
+                            ? isDark
+                              ? "bg-[#2541B2] text-white border-[#2541B2]"
+                              : "bg-[#2541B2] text-white border-[#2541B2]"
+                            : isDark
+                              ? "bg-white/5 text-white/60 border-white/10 hover:bg-white/10"
+                              : "bg-black/5 text-black/60 border-black/10 hover:bg-black/10"
                         }`}
                       >
                         {band.charAt(0).toUpperCase() + band.slice(1)}
@@ -379,7 +443,11 @@ export function CurrentSession({ activeSession }) {
             <button
               onClick={submitSkillsAndGetRecommendations}
               disabled={selectedSkills.length === 0}
-              className="w-full py-2 bg-primary text-primary-foreground rounded-lg disabled:opacity-50"
+              className={`w-full py-2.5 font-medium rounded-xl disabled:opacity-40 transition-all cursor-pointer ${
+                isDark
+                  ? "bg-white text-black hover:bg-white/90"
+                  : "bg-[#000000] text-white hover:bg-[#2541B2]"
+              }`}
             >
               Continue
             </button>
@@ -390,87 +458,22 @@ export function CurrentSession({ activeSession }) {
     );
   }
 
-  // Render recommendation cards
-  if (stage === "recommendations") {
-    return (
-      <div className="flex h-full flex-col">
-        <div className="flex-1 overflow-y-auto px-6 py-6 space-y-5">
-          {/* Messages area showing learning path if no issues match */}
-          {messages.map((msg, i) => (
-            <MessageBubble key={i} msg={msg} />
-          ))}
-
-          {/* Issues grid - only shown if recommendations exist */}
-          {recommendations.length > 0 && (
-            <div>
-              <h3 className="text-xl font-display font-bold mb-4">
-                Recommended Issues
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {recommendations.map((issue) => (
-                  <div
-                    key={issue.id}
-                    className="bg-card border border-gray-200 dark:border-gray-800 rounded-xl p-4 space-y-3"
-                  >
-                    <div className="flex justify-between items-start">
-                      <h4 className="font-semibold text-base">{issue.title}</h4>
-                      <span
-                        className={`text-xs px-2 py-0.5 rounded-full ${getDifficultyClass(issue.difficulty)}`}
-                      >
-                        {issue.difficulty}
-                      </span>
-                    </div>
-                    <div className="flex flex-wrap gap-1">
-                      {issue.skills?.slice(0, 3).map((skill) => (
-                        <span
-                          key={skill}
-                          className="text-xs bg-secondary px-2 py-0.5 rounded-full"
-                        >
-                          {skill}
-                        </span>
-                      ))}
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      Match: {Math.round((issue.combined_score || 0) * 100)}%
-                    </div>
-                    {issue.labels && issue.labels.length > 0 && (
-                      <div className="flex flex-wrap gap-1">
-                        {issue.labels.slice(0, 2).map((label) => (
-                          <span
-                            key={label}
-                            className="text-xs text-primary border border-primary/30 px-2 py-0.5 rounded-full"
-                          >
-                            {label}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    <button
-                      onClick={() => selectIssue(issue)}
-                      className="w-full py-2 bg-primary text-primary-foreground rounded-lg"
-                    >
-                      Select This Issue
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-        {InputArea}
-      </div>
-    );
-  }
-
-  // Initial state (only URL input)
+  // Initial state
   if (isInitial) {
     return (
       <div className="h-full flex flex-col">
         <div className="flex-1 flex items-center justify-center px-6">
-          <div className="w-full max-w-2xl">
-            <h2 className="text-2xl font-display font-bold text-center mb-8">
-              Let&rsquo;s find your next open-source contribution
+          <div className="w-full max-w-2xl text-center">
+            <h2
+              className={`text-2xl font-bold mb-2 ${isDark ? "text-white" : "text-black"}`}
+            >
+              Let&apos;s find your next open-source contribution
             </h2>
+            <p
+              className={`text-sm mb-8 ${isDark ? "text-white/40" : "text-black/40"}`}
+            >
+              Paste a GitHub repository URL to get started
+            </p>
             {InputArea}
           </div>
         </div>
@@ -478,25 +481,39 @@ export function CurrentSession({ activeSession }) {
     );
   }
 
-  // Normal chat mode (after issue selected, regular conversation)
+  // Normal chat mode
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-3 border-b border-gray-200 dark:border-gray-800 bg-background">
+      <div
+        className={`flex items-center justify-between px-6 py-3 border-b ${
+          isDark ? "border-white/6" : "border-black/6"
+        }`}
+      >
         <div className="flex items-center gap-3">
-          <span className="font-semibold text-foreground">
+          <span
+            className={`font-semibold text-sm ${isDark ? "text-white" : "text-black"}`}
+          >
             {repoLabel || "No repo selected"}
           </span>
           {phase && repoLabel && (
-            <span className="rounded-md bg-violet-600/15 px-2 py-0.5 text-xs font-medium text-violet-300">
+            <span
+              className={`rounded-lg px-2.5 py-0.5 text-[10px] font-medium ${
+                isDark
+                  ? "bg-[#2541B2]/20 text-[#1098F7]"
+                  : "bg-[#2541B2]/10 text-[#2541B2]"
+              }`}
+            >
               {phase}
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <div
+          className={`flex items-center gap-2 text-[10px] ${isDark ? "text-white/30" : "text-black/30"}`}
+        >
           <span
             className={cn(
-              "w-2 h-2 rounded-full",
+              "w-1.5 h-1.5 rounded-full",
               busy ? "bg-amber-400 animate-pulse" : "bg-emerald-400",
             )}
           />
@@ -507,84 +524,273 @@ export function CurrentSession({ activeSession }) {
       {/* Messages */}
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto px-6 py-6 space-y-5"
+        className="flex-1 overflow-y-auto px-6 py-6 space-y-6"
       >
         {messages.map((msg, i) => (
-          <MessageBubble key={i} msg={msg} />
+          <MessageBubble
+            key={i}
+            msg={msg}
+            selectedIssueId={selectedIssueId}
+            onSelectIssue={selectIssue}
+            getButtonDisabledState={getButtonDisabledState}
+            getButtonClassName={getButtonClassName}
+            getButtonText={getButtonText}
+            getDifficultyClass={getDifficultyClass}
+            isDark={isDark}
+          />
         ))}
       </div>
 
-      {/* Input area (normal chat) */}
       {InputArea}
     </div>
   );
 }
 
-// Copy-button enabled message bubble (unchanged from original but moved outside)
-function MessageBubble({ msg }) {
+function MessageBubble({
+  msg,
+  selectedIssueId,
+  onSelectIssue,
+  getButtonDisabledState,
+  getButtonClassName,
+  getButtonText,
+  getDifficultyClass,
+  isDark,
+}) {
   const isUser = msg.role === "user";
   const [copied, setCopied] = useState(false);
+  const [feedback, setFeedback] = useState(null);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(msg.content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleFeedback = (type) => {
+    setFeedback(type);
+  };
+
   return (
-    <div className={cn("flex", isUser ? "justify-end" : "justify-start")}>
+    <div
+      className={cn("flex w-full", isUser ? "justify-end" : "justify-start")}
+    >
       <div
         className={cn(
-          "max-w-[78%] rounded-2xl px-4 py-3 text-sm leading-relaxed",
+          "max-w-[85%] leading-relaxed",
           isUser
-            ? "bg-primary text-white shadow-md"
-            : "bg-gray-100 dark:bg-gray-800 text-foreground ring-1 ring-gray-200 dark:ring-gray-700",
+            ? `rounded-2xl px-4 py-3 ${isDark ? "bg-[#2541B2] text-white" : "bg-[#2541B2] text-white"}`
+            : "w-full py-1",
         )}
       >
         {isUser ? (
-          <span>{msg.content}</span>
+          <span className="whitespace-pre-wrap text-sm">{msg.content}</span>
         ) : (
-          <div className="prose prose-sm dark:prose-invert max-w-none break-words">
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              rehypePlugins={[rehypeHighlight]}
-              components={{
-                code({ _, inline, className, children, ...props }) {
-                  const match = /language-(\w+)/.exec(className || "");
-                  if (!inline && match) {
-                    const codeString = String(children).replace(/\n$/, "");
+          <div className="w-full">
+            <div className="prose prose-sm max-w-none break-words">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                rehypePlugins={[rehypeHighlight]}
+                components={{
+                  code({ _, inline, className, children, ...props }) {
+                    const match = /language-(\w+)/.exec(className || "");
+                    if (!inline && match) {
+                      const codeString = String(children).replace(/\n$/, "");
+                      return (
+                        <div className="relative group/my-2">
+                          <pre
+                            className={`${className} rounded-xl p-4 overflow-x-auto text-xs`}
+                            {...props}
+                          >
+                            <code className={match[1]}>{children}</code>
+                          </pre>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(codeString);
+                              setCopied(true);
+                              setTimeout(() => setCopied(false), 2000);
+                            }}
+                            className={`absolute top-2 right-2 p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity ${
+                              isDark
+                                ? "bg-white/10 text-white/60 hover:text-white"
+                                : "bg-black/10 text-black/60 hover:text-black"
+                            }`}
+                          >
+                            {copied ? <Check size={14} /> : <Copy size={14} />}
+                          </button>
+                        </div>
+                      );
+                    }
                     return (
-                      <div className="relative group">
-                        <pre className={className} {...props}>
-                          <code className={match[1]}>{children}</code>
-                        </pre>
+                      <code
+                        className={`${className} px-1 py-0.5 rounded text-xs ${
+                          isDark
+                            ? "bg-white/10 text-white/80"
+                            : "bg-black/10 text-black/80"
+                        }`}
+                        {...props}
+                      >
+                        {children}
+                      </code>
+                    );
+                  },
+                }}
+              >
+                {msg.content}
+              </ReactMarkdown>
+            </div>
+
+            {/* Inline recommendations */}
+            {msg.recommendations && msg.recommendations.length > 0 && (
+              <div
+                className={`mt-4 pt-4 ${isDark ? "border-t border-white/6" : "border-t border-black/6"}`}
+              >
+                <h4
+                  className={`font-semibold text-sm mb-3 ${isDark ? "text-white" : "text-black"}`}
+                >
+                  Recommended Issues
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {msg.recommendations.map((issue) => {
+                    const isThisSelected = selectedIssueId === issue.id;
+                    const hasAnySelected = selectedIssueId !== null;
+                    return (
+                      <div
+                        key={issue.id}
+                        className={cn(
+                          "border rounded-xl p-4 space-y-3 transition-all",
+                          isThisSelected
+                            ? isDark
+                              ? "border-[#2541B2] ring-1 ring-[#2541B2]/20 bg-[#2541B2]/5"
+                              : "border-[#2541B2] ring-1 ring-[#2541B2]/20 bg-[#2541B2]/5"
+                            : isDark
+                              ? "border-white/6 bg-white/2"
+                              : "border-black/6 bg-white",
+                        )}
+                      >
+                        <div className="flex justify-between items-start gap-2">
+                          <h5
+                            className={`font-semibold text-sm leading-snug line-clamp-2 ${isDark ? "text-white" : "text-black"}`}
+                          >
+                            {issue.title}
+                          </h5>
+                          <span
+                            className={cn(
+                              "text-[10px] px-2 py-0.5 rounded-full font-medium shrink-0 uppercase tracking-wider",
+                              getDifficultyClass(issue.difficulty),
+                            )}
+                          >
+                            {issue.difficulty}
+                          </span>
+                        </div>
+
+                        {issue.summary && (
+                          <p
+                            className={`text-xs line-clamp-3 leading-relaxed ${isDark ? "text-white/40" : "text-black/40"}`}
+                          >
+                            {issue.summary}
+                          </p>
+                        )}
+
+                        <div className="flex flex-wrap gap-1">
+                          {issue.skills?.slice(0, 3).map((skill) => (
+                            <span
+                              key={skill}
+                              className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                                isDark
+                                  ? "bg-white/5 text-white/60"
+                                  : "bg-black/5 text-black/60"
+                              }`}
+                            >
+                              {skill}
+                            </span>
+                          ))}
+                        </div>
+
                         <button
-                          onClick={() => {
-                            navigator.clipboard.writeText(codeString);
-                            setCopied(true);
-                            setTimeout(() => setCopied(false), 2000);
-                          }}
-                          className="absolute top-2 right-2 p-1 rounded bg-gray-800 opacity-0 group-hover:opacity-100 transition"
+                          disabled={getButtonDisabledState(
+                            isThisSelected,
+                            hasAnySelected,
+                          )}
+                          onClick={() => onSelectIssue(issue)}
+                          className={getButtonClassName(
+                            isThisSelected,
+                            hasAnySelected,
+                          )}
                         >
-                          {copied ? <Check size={14} /> : <Copy size={14} />}
+                          {getButtonText(isThisSelected, hasAnySelected)}
                         </button>
                       </div>
                     );
-                  }
-                  return (
-                    <code className={className} {...props}>
-                      {children}
-                    </code>
-                  );
-                },
-              }}
-            >
-              {msg.content}
-            </ReactMarkdown>
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Action buttons */}
+            {!msg.pending && msg.content && (
+              <div
+                className={`flex items-center gap-2 mt-3 text-xs ${isDark ? "text-white/30" : "text-black/30"}`}
+              >
+                <button
+                  onClick={handleCopy}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition-colors ${
+                    isDark
+                      ? "border-white/8 hover:bg-white/5 hover:text-white/60"
+                      : "border-black/8 hover:bg-black/5 hover:text-black/60"
+                  }`}
+                >
+                  {copied ? (
+                    <Check className="h-3.5 w-3.5" />
+                  ) : (
+                    <Copy className="h-3.5 w-3.5" />
+                  )}
+                  <span>{copied ? "Copied" : "Copy"}</span>
+                </button>
+                <button
+                  onClick={() => handleFeedback("good")}
+                  className={cn(
+                    "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition-colors",
+                    feedback === "good"
+                      ? isDark
+                        ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                        : "bg-emerald-50 border-emerald-200 text-emerald-600"
+                      : isDark
+                        ? "border-white/8 hover:bg-white/5 hover:text-white/60"
+                        : "border-black/8 hover:bg-black/5 hover:text-black/60",
+                  )}
+                >
+                  <ThumbsUp className="h-3.5 w-3.5" />
+                  <span>Good</span>
+                </button>
+                <button
+                  onClick={() => handleFeedback("bad")}
+                  className={cn(
+                    "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition-colors",
+                    feedback === "bad"
+                      ? isDark
+                        ? "bg-red-500/10 border-red-500/20 text-red-400"
+                        : "bg-red-50 border-red-200 text-red-600"
+                      : isDark
+                        ? "border-white/8 hover:bg-white/5 hover:text-white/60"
+                        : "border-black/8 hover:bg-black/5 hover:text-black/60",
+                  )}
+                >
+                  <ThumbsDown className="h-3.5 w-3.5" />
+                  <span>Bad</span>
+                </button>
+              </div>
+            )}
           </div>
         )}
         {msg.pending && (
-          <span className="ml-1 inline-flex gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" />
+          <span className="ml-1 inline-flex gap-1 mt-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#1098F7] animate-bounce" />
             <span
-              className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce"
+              className="w-1.5 h-1.5 rounded-full bg-[#1098F7] animate-bounce"
               style={{ animationDelay: "150ms" }}
             />
             <span
-              className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce"
+              className="w-1.5 h-1.5 rounded-full bg-[#1098F7] animate-bounce"
               style={{ animationDelay: "300ms" }}
             />
           </span>
