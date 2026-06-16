@@ -1,7 +1,7 @@
 // frontend/src/lib/api.js
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
 
-async function request(path, options = {}) {
+export async function request(path, options = {}) {
   const headers = {
     "Content-Type": "application/json",
     ...(options.headers || {}),
@@ -73,10 +73,11 @@ export const api = {
 export async function poll(
   fn,
   done,
-  { intervalMs = 1500, timeoutMs = 120000 } = {},
+  { intervalMs = 1500, timeoutMs = 120000, signal } = {},
 ) {
   const start = Date.now();
   while (true) {
+    if (signal?.aborted) throw new Error("Aborted");
     const v = await fn();
     if (done(v)) return v;
     if (Date.now() - start > timeoutMs) throw new Error("Timed out");

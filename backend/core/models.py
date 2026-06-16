@@ -37,6 +37,8 @@ class UserProfile(models.Model):
     target_repo = models.ForeignKey(
         Repository, null=True, blank=True, on_delete=models.SET_NULL
     )
+    supabase_uid = models.CharField(max_length=128, unique=True, null=True, blank=True)
+    email_verified = models.BooleanField(default=False)
 
     def __str__(self):
         return f"{self.user.username}'s profile"

@@ -12,10 +12,13 @@ from .views import (
     RecommendationView,
     RepositoryAnalyzeView,
     RepositoryStatusView,
+    ResendVerificationView,
     SelectIssueView,
     SignupView,
     StructuredSkillsView,
+    SupabaseLoginView,
     UpdateSessionSkillsView,
+    UpdateUsernameView,
 )
 
 urlpatterns = [
@@ -50,6 +53,7 @@ urlpatterns = [
     path("auth/signup/", SignupView.as_view()),
     path("auth/login/", LoginView.as_view()),
     path("auth/logout/", LogoutView.as_view()),
+    path("auth/supabase/", SupabaseLoginView.as_view()),
     path(
         "chat/session/<int:session_id>/skills/structured/",
         StructuredSkillsView.as_view(),
@@ -63,5 +67,11 @@ urlpatterns = [
         "chat/session/<int:session_id>/select-issue/",
         SelectIssueView.as_view(),
         name="select-issue",
+    ),
+    path("auth/username/", UpdateUsernameView.as_view(), name="update-username"),
+    path(
+        "auth/resend-verification/",
+        ResendVerificationView.as_view(),
+        name="resend-verification",
     ),
 ]

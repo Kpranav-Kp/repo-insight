@@ -3,6 +3,22 @@
 @import "highlight.js/styles/github-dark.min.css";
 @custom-variant dark (&:is(.dark,.dark *));
 
+@font-face {
+  font-family: "Mileast";
+  src: url("https://db.onlinewebfonts.com/t/10a46d23641fd81998997964d79c9d58.eot");
+  src:
+    url("https://db.onlinewebfonts.com/t/10a46d23641fd81998997964d79c9d58.eot?#iefix")
+      format("embedded-opentype"),
+    url("https://db.onlinewebfonts.com/t/10a46d23641fd81998997964d79c9d58.woff2")
+      format("woff2"),
+    url("https://db.onlinewebfonts.com/t/10a46d23641fd81998997964d79c9d58.woff")
+      format("woff"),
+    url("https://db.onlinewebfonts.com/t/10a46d23641fd81998997964d79c9d58.ttf")
+      format("truetype"),
+    url("https://db.onlinewebfonts.com/t/10a46d23641fd81998997964d79c9d58.svg#Mileast")
+      format("svg");
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;

@@ -1,3 +1,4 @@
+import { PanelRight } from "lucide-react";
 import { useState } from "react";
 
 import { ChatSidebar } from "@/components/chat/ChatSidebar";
@@ -12,6 +13,7 @@ export default function ChatPage({ onLogout }) {
   const [username, setUsername] = useState(
     localStorage.getItem("username") || "",
   );
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const user = {
     email: localStorage.getItem("email"),
@@ -21,11 +23,13 @@ export default function ChatPage({ onLogout }) {
   const handleNewChat = () => {
     setActiveSession(null);
     setChatKey((k) => k + 1);
+    setSidebarOpen(false);
   };
 
   const handleSelectSession = (session) => {
     setActiveSession(session);
     setChatKey((k) => k + 1);
+    setSidebarOpen(false);
   };
 
   const handleLogout = async () => {
@@ -45,9 +49,9 @@ export default function ChatPage({ onLogout }) {
       }`}
     >
       <div className="relative flex h-full p-3 gap-3">
-        {/* Sidebar with rounded corners and subtle separation */}
+        {/* Sidebar — hidden on mobile, inline on desktop */}
         <div
-          className={`shrink-0 rounded-2xl overflow-hidden transition-all duration-300 ${
+          className={`hidden md:block shrink-0 rounded-2xl overflow-hidden transition-all duration-300 ${
             isDark
               ? "bg-[#171717] border border-white/6"
               : "bg-white border border-black/6 shadow-sm"
@@ -65,6 +69,39 @@ export default function ChatPage({ onLogout }) {
           />
         </div>
 
+        {/* Mobile sidebar overlay */}
+        {sidebarOpen && (
+          <div className="fixed inset-0 z-50 md:hidden">
+            <div
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => setSidebarOpen(false)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => e.key === "Escape" && setSidebarOpen(false)}
+            />
+            <div className="absolute left-0 top-0 bottom-0 w-72 max-w-[80vw]">
+              <div
+                className={`h-full rounded-r-2xl overflow-hidden ${
+                  isDark
+                    ? "bg-[#171717] border-r border-white/6"
+                    : "bg-white border-r border-black/6 shadow-sm"
+                }`}
+              >
+                <ChatSidebar
+                  user={user}
+                  onLogout={handleLogout}
+                  onSelectSession={handleSelectSession}
+                  activeSessionId={activeSession?.localId}
+                  onNewChat={handleNewChat}
+                  onUsernameChange={(newName) => {
+                    setUsername(newName);
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Main chat area with rounded corners */}
         <div
           className={`flex-1 min-w-0 rounded-2xl overflow-hidden transition-colors duration-300 ${
@@ -73,6 +110,24 @@ export default function ChatPage({ onLogout }) {
               : "bg-white border border-black/6 shadow-sm"
           }`}
         >
+          {/* Mobile header with sidebar toggle */}
+          <div className="md:hidden flex items-center gap-2 px-4 py-2 border-b border-white/10">
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className={`p-2 rounded-xl transition-colors ${
+                isDark
+                  ? "text-white/40 hover:bg-white/5 hover:text-white"
+                  : "text-black/40 hover:bg-black/5 hover:text-black"
+              }`}
+              aria-label="Open sidebar"
+            >
+              <PanelRight className="h-4 w-4" />
+            </button>
+            <span className="text-sm font-mono tracking-widest uppercase text-white/50">
+              RepoInsight
+            </span>
+          </div>
+
           <CurrentSession key={chatKey} activeSession={activeSession} />
         </div>
       </div>

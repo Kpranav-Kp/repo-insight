@@ -19,6 +19,9 @@ const WELCOME = {
 export function CurrentSession({ activeSession }) {
   const { theme } = useTheme();
   const isDark = theme === "dark";
+  const mountedRef = useRef(true);
+  const abortControllerRef = useRef(null);
+
   const [stage, setStage] = useState(
     activeSession?.sessionId ? "ready" : "idle",
   );
@@ -29,6 +32,16 @@ export function CurrentSession({ activeSession }) {
   const [messages, setMessages] = useState(
     activeSession?.messages?.length ? activeSession.messages : [WELCOME],
   );
+
+  useEffect(() => {
+    mountedRef.current = true;
+    abortControllerRef.current = new AbortController();
+    return () => {
+      mountedRef.current = false;
+      abortControllerRef.current?.abort();
+    };
+  }, []);
+
   const [input, setInput] = useState("");
   const [error, setError] = useState(null);
   const [repoSkills, setRepoSkills] = useState([]);
@@ -88,7 +101,11 @@ export function CurrentSession({ activeSession }) {
       const repo = await poll(
         () => api.repositoryStatus(repoId),
         (r) => r.status === "completed" || r.status === "failed",
-        { intervalMs: 2000, timeoutMs: 5 * 60_000 },
+        {
+          intervalMs: 2000,
+          timeoutMs: 5 * 60_000,
+          signal: abortControllerRef.current?.signal,
+        },
       );
       if (repo.status === "failed") {
         throw new Error(repo.error_message || "Repository analysis failed.");
@@ -174,7 +191,11 @@ export function CurrentSession({ activeSession }) {
       const result = await poll(
         () => api.chatResult(accepted.task_id),
         (r) => r.status === "done",
-        { intervalMs: 1500, timeoutMs: 2 * 60_000 },
+        {
+          intervalMs: 1500,
+          timeoutMs: 2 * 60_000,
+          signal: abortControllerRef.current?.signal,
+        },
       );
 
       if (result.status === "done") {
@@ -209,7 +230,11 @@ export function CurrentSession({ activeSession }) {
       const result = await poll(
         () => api.chatResult(accepted.task_id),
         (r) => r.status === "done",
-        { intervalMs: 1500, timeoutMs: 2 * 60_000 },
+        {
+          intervalMs: 1500,
+          timeoutMs: 2 * 60_000,
+          signal: abortControllerRef.current?.signal,
+        },
       );
       if (result.status === "done") {
         setPhase(result.phase || phase);

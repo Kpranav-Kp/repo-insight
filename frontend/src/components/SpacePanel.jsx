@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 
 const quotes = [
   {
@@ -8,19 +9,59 @@ const quotes = [
     role: "Creator of Linux & Git",
   },
   {
-    text: "The production of top-tier software is an engineering art form.",
-    author: "Repo Insight Core",
-    role: "Platform Engine",
+    text: "Programs must be written for people to read, and only incidentally for machines to execute.",
+    author: "Harold Abelson",
+    role: "Co-Author of SICP",
   },
   {
-    text: "Clear is better than clever.",
-    author: "The Zen of Python",
-    role: "Design Axioms",
+    text: "The best way to predict the future is to invent it.",
+    author: "Alan Kay",
+    role: "Pioneer of Object-Oriented Programming",
   },
   {
-    text: "Security is not a feature, it is a foundation.",
-    author: "LangGuardX Principles",
-    role: "Security Layer",
+    text: "Debugging is twice as hard as writing the code in the first place. Therefore, if you write the code as cleverly as possible, you are by definition not smart enough to debug it.",
+    author: "Brian Kernighan",
+    role: "Co-Creator of Unix",
+  },
+  {
+    text: "Always code as if the guy who ends up maintaining your code will be a violent psychopath who knows where you live.",
+    author: "John Woods",
+    role: "Software Engineer & Author",
+  },
+  {
+    text: "First, solve the problem. Then, write the code.",
+    author: "John Johnson",
+    role: "Computer Scientist",
+  },
+  {
+    text: "The most dangerous phrase in the language is: 'We've always done it this way.'",
+    author: "Grace Hopper",
+    role: "Computer Science Pioneer",
+  },
+  {
+    text: "Simplicity is a prerequisite for reliability.",
+    author: "Edsger W. Dijkstra",
+    role: "Turing Award Laureate",
+  },
+  {
+    text: "Any fool can write code that a computer can understand. Good programmers write code that humans can understand.",
+    author: "Martin Fowler",
+    role: "Author of Refactoring",
+  },
+  {
+    text: "The function of good software is to make the complex appear to be simple.",
+    author: "Grady Booch",
+    role: "Co-Creator of UML",
+  },
+  {
+    text: "Software is a great combination between artistry and engineering.",
+    author: "Bill Gates",
+    role: "Co-Founder of Microsoft",
+  },
+  {
+    text: "Walking on water and developing software from a specification are easy if both are frozen.",
+    author: "Edward V. Berard",
+    role: "Software Engineering Author",
   },
 ];
 
@@ -258,9 +299,12 @@ export default function SpacePanel() {
         className="absolute inset-0 z-0 pointer-events-none"
       />
 
-      <div className="relative z-10 text-[10px] font-mono tracking-widest text-[#1098F7] uppercase opacity-60">
-        Repository Analysis Terminal
-      </div>
+      <Link
+        to="/"
+        className="relative z-10 text-[10px] font-mono tracking-widest text-[#1098F7] uppercase opacity-60 hover:opacity-100 transition-opacity"
+      >
+        RepoInsight
+      </Link>
 
       <div className="relative z-10 max-w-md my-auto">
         <AnimatePresence mode="wait">

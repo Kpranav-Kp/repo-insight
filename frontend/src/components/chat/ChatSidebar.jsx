@@ -24,7 +24,7 @@ export function ChatSidebar({
 }) {
   const { theme } = useTheme();
   const isDark = theme === "dark";
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const [sessions, setSessions] = useState([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -181,7 +181,7 @@ export function ChatSidebar({
             <Popover.Portal>
               <Popover.Positioner>
                 <Popover.Popup
-                  className={`z-50 w-52 rounded-2xl border p-2 shadow-2xl ${
+                  className={`z-[60] w-52 rounded-2xl border p-2 shadow-2xl ${
                     isDark
                       ? "border-white/10 bg-[#1a1a1a]"
                       : "border-black/10 bg-white"

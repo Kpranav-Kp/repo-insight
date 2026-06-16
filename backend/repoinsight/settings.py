@@ -193,3 +193,7 @@ GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 GITHUB_ISSUE_LIMIT = int(os.getenv("GITHUB_ISSUE_LIMIT", 300))
 GITHUB_PR_LIMIT = int(os.getenv("GITHUB_PR_LIMIT", 150))
+
+SUPABASE_URL = os.getenv("SUPABASE_URL", "")
+SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "")
+SUPABASE_PUBLISHABLE_KEY = os.getenv("SUPABASE_PUBLISHABLE_KEY", "")

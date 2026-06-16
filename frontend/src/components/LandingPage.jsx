@@ -13,19 +13,66 @@ import { Link } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 
+let introPlayed = false;
+
 export default function LandingPage() {
   const canvasRef = useRef(null);
   const scrollContainerRef = useRef(null);
+  const navTextRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
   const [flippedIdx, setFlippedIdx] = useState(null);
-  const [scrollY, setScrollY] = useState(0);
+  const [introPhase, setIntroPhase] = useState(
+    introPlayed ? "done" : "initial",
+  );
+  const [isMobile, setIsMobile] = useState(false);
+  const [navTextCenter, setNavTextCenter] = useState(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const dragStart = useRef({ x: 0, scrollLeft: 0 });
 
   useEffect(() => {
-    const onScroll = () => setScrollY(window.scrollY);
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    const measure = () => {
+      if (navTextRef.current) {
+        const rect = navTextRef.current.getBoundingClientRect();
+        setNavTextCenter({
+          x: rect.left + rect.width / 2,
+          y: rect.top + rect.height / 2,
+        });
+      }
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
   }, []);
+
+  useEffect(() => {
+    if (introPhase !== "initial") return;
+    const t1 = setTimeout(() => setIntroPhase("left"), 1200);
+    const t2 = setTimeout(() => setIntroPhase("right"), 3800);
+    const t3 = setTimeout(() => setIntroPhase("reveal"), 7500);
+    const t4 = setTimeout(() => {
+      setIntroPhase("done");
+      introPlayed = true;
+      window.scrollTo({ top: 0, behavior: "instant" });
+    }, 9200);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+      clearTimeout(t4);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  const toggleFlip = (idx) => {
+    setFlippedIdx(flippedIdx === idx ? null : idx);
+  };
 
   // ── 1. Full-Page Aurora Canvas ──
   useEffect(() => {
@@ -229,85 +276,218 @@ export default function LandingPage() {
 
   return (
     <div className="relative min-h-screen overflow-x-hidden transition-colors duration-500 font-sans bg-[#000000] text-white">
-      {/* ── Full-Page Aurora Background (dims from 100% to 50% over 1 viewport scroll) ── */}
+      {/* ── Full-Page Aurora Background ── */}
       <canvas
         ref={canvasRef}
         className="fixed inset-0 pointer-events-none z-0 mix-blend-normal"
-        style={{
-          opacity: Math.max(0.8, 1 - scrollY / (window.innerHeight * 2)),
-        }}
+        style={{ opacity: 0.8 }}
       />
 
-      {/* ── Aurora-only spacer — content hidden until one full scroll ── */}
-      <div className="h-screen relative z-10 pointer-events-none" />
+      {/* ── Intro Overlay ── */}
+      {introPhase !== "done" && (
+        <div className="fixed inset-0 z-50 pointer-events-none">
+          {/* Black background — slides up (slow-fast-slow bezier) */}
+          <div
+            className="absolute inset-0 bg-black"
+            style={{
+              transform:
+                introPhase === "reveal" ? "translateY(-100%)" : "translateY(0)",
+              transition: "transform 1.5s cubic-bezier(0.8, 0, 0.2, 1)",
+            }}
+          />
 
-      {/* ── Scroll prompt — fades in after 1s, vanishes on scroll ── */}
-      {scrollY < window.innerHeight && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1, duration: 1 }}
-          className="fixed bottom-12 left-1/2 -translate-x-1/2 z-20 text-white/40 text-[10px] font-mono tracking-[0.2em] uppercase flex flex-col items-center"
-        >
-          <span>Scroll to explore</span>
-          <motion.span
-            animate={{ y: [0, 5, 0] }}
-            transition={{ repeat: Infinity, duration: 1.5 }}
-            className="mt-1.5 text-xs"
+          {/* Left side text — above title on mobile, left on desktop */}
+          <div
+            className={
+              isMobile
+                ? "absolute top-[15%] left-1/2 -translate-x-1/2 w-[85vw] max-w-[320px] text-center"
+                : "absolute left-8 md:left-16 top-1/2 -translate-y-1/2 max-w-[240px] text-right"
+            }
           >
-            ↓
-          </motion.span>
-        </motion.div>
+            <p
+              className="text-[12px] md:text-sm tracking-wider text-white/90 leading-relaxed uppercase text-center md:text-right"
+              style={{
+                fontFamily: "Mileast, serif",
+                opacity:
+                  introPhase === "reveal"
+                    ? 0
+                    : introPhase === "initial"
+                      ? 0
+                      : 1,
+                transition: "opacity 1.5s ease-in-out",
+              }}
+            >
+              &ldquo;Open source is not just about code — it is about community,
+              collaboration, and building something bigger than yourself.&rdquo;
+            </p>
+          </div>
+
+          {/* Centered title — shrinks to navbar text position on reveal */}
+          <div
+            className="absolute inset-0 flex items-center justify-center"
+            style={{
+              transform:
+                introPhase === "reveal" && navTextCenter
+                  ? `translateX(${navTextCenter.x - window.innerWidth / 2}px) translateY(${navTextCenter.y - window.innerHeight / 2}px) scale(0.15)`
+                  : "translateX(0) translateY(0) scale(1)",
+              transition: "transform 1.5s cubic-bezier(0.8, 0, 0.2, 1)",
+            }}
+          >
+            <h1
+              className="text-7xl sm:text-8xl md:text-9xl font-black tracking-tight text-white leading-none"
+              style={{ fontFamily: "Orange Vintage, serif" }}
+            >
+              RepoInsight
+            </h1>
+          </div>
+
+          {/* Right side text — below title on mobile, right on desktop */}
+          <div
+            className={
+              isMobile
+                ? "absolute bottom-[15%] left-1/2 -translate-x-1/2 w-[85vw] max-w-[320px] text-center"
+                : "absolute right-8 md:right-16 top-1/2 -translate-y-1/2 max-w-[240px] text-left"
+            }
+          >
+            <p
+              className="text-[12px] md:text-sm tracking-wider text-white/90 leading-relaxed uppercase text-center md:text-left"
+              style={{
+                fontFamily: "Mileast, serif",
+                opacity:
+                  introPhase === "reveal"
+                    ? 0
+                    : introPhase === "initial" || introPhase === "left"
+                      ? 0
+                      : 1,
+                transition: "opacity 1.5s ease-in-out",
+              }}
+            >
+              &ldquo;Every contribution starts with a single issue. Every expert
+              was once a beginner who refused to give up.&rdquo;
+            </p>
+          </div>
+        </div>
       )}
 
-      <div
-        className="relative"
-        style={{
-          opacity: scrollY >= window.innerHeight ? 1 : 0,
-          pointerEvents: scrollY >= window.innerHeight ? "auto" : "none",
-        }}
-      >
-        {/* ── Navigation ── */}
-        <nav className="fixed top-4 left-4 right-4 md:left-8 md:right-8 z-50 flex items-center justify-between px-6 md:px-10 py-4 bg-black/50 border border-white/10 backdrop-blur-xl rounded-2xl">
-          <div className="flex items-center gap-2.5 font-mono text-sm font-black tracking-widest uppercase">
-            <span className="text-white">RepoInsight</span>
-          </div>
+      {/* ── Navigation (always visible, behind intro initially) ── */}
+      <nav className="fixed top-4 left-4 right-4 md:left-8 md:right-8 z-40 flex items-center justify-between px-6 md:px-10 py-4 bg-black/50 border border-white/10 backdrop-blur-xl rounded-2xl">
+        <div className="flex items-center gap-2.5 font-mono text-sm font-black tracking-widest uppercase">
+          <span
+            ref={navTextRef}
+            className="text-white"
+            style={{ opacity: introPhase === "done" ? 1 : 0 }}
+          >
+            RepoInsight
+          </span>
+        </div>
 
-          <div className="hidden md:flex items-center gap-10 font-mono text-[11px] tracking-widest uppercase text-white/70">
-            <a
-              href="#how-it-works"
-              className="hover:text-white transition-colors"
-            >
-              How It Works
-            </a>
-            <a href="#journey" className="hover:text-white transition-colors">
-              Journey
-            </a>
-            <a
-              href="#architecture"
-              className="hover:text-white transition-colors"
-            >
-              Architecture
-            </a>
-          </div>
+        {/* Desktop nav links */}
+        <div className="hidden md:flex items-center gap-10 font-mono text-[11px] tracking-widest uppercase text-white/70">
+          <a
+            href="#how-it-works"
+            className="hover:text-white transition-colors"
+          >
+            How It Works
+          </a>
+          <a href="#journey" className="hover:text-white transition-colors">
+            Journey
+          </a>
+          <a
+            href="#architecture"
+            className="hover:text-white transition-colors"
+          >
+            Architecture
+          </a>
+        </div>
 
-          <div className="flex items-center gap-3">
-            <Link to="/login">
-              <span className="font-mono text-[11px] uppercase tracking-widest hidden sm:inline-block hover:text-white transition-colors text-white/70">
+        <div className="flex items-center gap-3">
+          <Link to="/login">
+            <span className="font-mono text-[11px] uppercase tracking-widest hidden sm:inline-block hover:text-white transition-colors text-white/70">
+              Log In
+            </span>
+          </Link>
+          <Link to="/signup">
+            <Button
+              size="sm"
+              className="font-mono text-[10px] uppercase tracking-widest rounded-full px-5 py-2 transition-all duration-300 bg-[#2541B2] text-white hover:bg-[#1098F7]"
+            >
+              Get Started
+            </Button>
+          </Link>
+
+          {/* Hamburger — visible on mobile only */}
+          <button
+            className="md:hidden focus:outline-none flex items-center justify-center w-9 h-9 rounded-xl bg-white/10 border border-white/20 hover:bg-white/20 transition-colors text-white text-xl leading-none"
+            onClick={() => setMobileMenuOpen((prev) => !prev)}
+            aria-label="Toggle menu"
+          >
+            {mobileMenuOpen ? "✕" : "☰"}
+          </button>
+        </div>
+      </nav>
+
+      {/* Mobile menu overlay + panel */}
+      {isMobile && mobileMenuOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            onClick={() => setMobileMenuOpen(false)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => e.key === "Escape" && setMobileMenuOpen(false)}
+          />
+          <div className="relative bg-black/95 border border-white/10 backdrop-blur-xl rounded-2xl p-6 mx-4 w-full max-w-sm">
+            {/* Close button inside the panel */}
+            <button
+              className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center text-white/60 hover:text-white rounded-xl hover:bg-white/5 transition-colors"
+              onClick={() => setMobileMenuOpen(false)}
+              aria-label="Close menu"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path
+                  d="M3 3L13 13M13 3L3 13"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </button>
+            <div className="flex flex-col gap-2 pt-4">
+              {[
+                { label: "How It Works", href: "#how-it-works" },
+                { label: "Journey", href: "#journey" },
+                { label: "Architecture", href: "#architecture" },
+              ].map((item) => (
+                <a
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="font-mono text-sm tracking-widest uppercase text-white/70 hover:text-white transition-colors py-3 px-4 rounded-xl hover:bg-white/5"
+                >
+                  {item.label}
+                </a>
+              ))}
+              <hr className="border-white/10 my-1" />
+              <Link
+                to="/login"
+                onClick={() => setMobileMenuOpen(false)}
+                className="font-mono text-sm tracking-widest uppercase text-white/70 hover:text-white transition-colors py-3 px-4 rounded-xl hover:bg-white/5"
+              >
                 Log In
-              </span>
-            </Link>
-            <Link to="/signup">
-              <Button
-                size="sm"
-                className="font-mono text-[10px] uppercase tracking-widest rounded-full px-5 py-2 transition-all duration-300 bg-[#2541B2] text-white hover:bg-[#1098F7]"
+              </Link>
+              <Link
+                to="/signup"
+                onClick={() => setMobileMenuOpen(false)}
+                className="font-mono text-sm tracking-widest uppercase text-white/90 bg-white/10 hover:bg-white/20 transition-colors py-3 px-4 rounded-xl"
               >
                 Get Started
-              </Button>
-            </Link>
+              </Link>
+            </div>
           </div>
-        </nav>
+        </div>
+      )}
 
+      <div className="relative">
         {/* ── Hero Section ── */}
         <main className="relative z-10 max-w-5xl mx-auto px-6 text-center flex flex-col items-center justify-center min-h-screen">
           <motion.div
@@ -330,7 +510,7 @@ export default function LandingPage() {
               Socratic questioning until you genuinely know the code.
             </p>
 
-            <div className="flex items-center gap-4">
+            <div className="flex flex-col sm:flex-row items-center gap-4">
               <Link to="/signup">
                 <Button
                   size="lg"
@@ -370,118 +550,239 @@ export default function LandingPage() {
               </div>
             </div>
 
-            {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
-            <div
-              ref={scrollContainerRef}
-              className="flex gap-6 overflow-x-auto pb-8 scrollbar-hide cursor-grab active:cursor-grabbing select-none"
-              style={{
-                scrollbarWidth: "none",
-                msOverflowStyle: "none",
-                scrollBehavior: "smooth",
-              }}
-              onMouseDown={handleMouseDown}
-              onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={handleMouseUp}
-            >
-              {howItWorksCards.map((card, idx) => (
-                <div
-                  key={idx}
-                  className="shrink-0 w-85 md:w-100 snap-start"
-                  style={{ perspective: "1000px" }}
-                  onMouseEnter={() => setFlippedIdx(idx)}
-                  onMouseLeave={() => setFlippedIdx(null)}
-                >
-                  <motion.div
-                    initial={{ opacity: 0, y: 30 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true, margin: "-50px" }}
-                    transition={{ duration: 0.5, delay: idx * 0.1 }}
+            {isMobile ? (
+              <div className="flex flex-col gap-4">
+                {howItWorksCards.map((card, idx) => (
+                  <div
+                    key={idx}
+                    className="w-full"
+                    style={{ perspective: "1000px" }}
                   >
-                    <div
-                      className="transition-transform duration-700 ease-in-out rounded-2xl border border-white/10 grid [grid-template-areas:'stack'] h-[420px]"
-                      style={{
-                        transformStyle: "preserve-3d",
-                        transform:
-                          flippedIdx === idx
-                            ? "rotateY(180deg)"
-                            : "rotateY(0deg)",
-                      }}
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      viewport={{ once: true }}
+                      transition={{ duration: 0.4, delay: idx * 0.05 }}
                     >
-                      <div className="[grid-area:stack] backface-hidden rounded-2xl bg-black p-8">
-                        <div className="flex items-start justify-between mb-8">
-                          <div
-                            className="w-10 h-10 rounded-xl flex items-center justify-center"
-                            style={{
-                              backgroundColor: `${card.accent}18`,
-                              color: card.accent,
-                            }}
-                          >
-                            {card.icon}
-                          </div>
-                          <span
-                            className="text-5xl font-black font-mono opacity-40"
-                            style={{ color: card.accent }}
-                          >
-                            {card.num}
-                          </span>
-                        </div>
-                        <div className="mb-2">
-                          <span
-                            className="text-[10px] font-mono tracking-widest uppercase opacity-60"
-                            style={{ color: card.accent }}
-                          >
-                            {card.subtitle}
-                          </span>
-                        </div>
-                        <h3 className="text-xl font-serif font-bold mb-4 leading-tight text-white">
-                          {card.title}
-                        </h3>
-                        <p className="text-sm text-white/50 leading-relaxed font-sans">
-                          Hover to explore &rarr;
-                        </p>
-                      </div>
                       <div
-                        className="[grid-area:stack] backface-hidden rounded-2xl bg-white p-8"
-                        style={{ transform: "rotateY(180deg)" }}
+                        className="transition-transform duration-500 ease-in-out rounded-2xl border border-white/10 grid [grid-template-areas:'stack'] min-h-[280px] cursor-pointer"
+                        style={{
+                          transformStyle: "preserve-3d",
+                          transform:
+                            flippedIdx === idx
+                              ? "rotateY(180deg)"
+                              : "rotateY(0deg)",
+                        }}
+                        onClick={() => toggleFlip(idx)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) =>
+                          (e.key === "Enter" || e.key === " ") &&
+                          toggleFlip(idx)
+                        }
                       >
-                        <div className="flex items-start justify-between mb-6">
-                          <div
-                            className="w-10 h-10 rounded-xl flex items-center justify-center"
-                            style={{
-                              backgroundColor: `${card.accent}15`,
-                              color: card.accent,
-                            }}
-                          >
-                            {card.icon}
+                        <div className="[grid-area:stack] backface-hidden rounded-2xl bg-black p-6">
+                          <div className="flex items-start justify-between mb-6">
+                            <div
+                              className="w-9 h-9 rounded-xl flex items-center justify-center"
+                              style={{
+                                backgroundColor: `${card.accent}18`,
+                                color: card.accent,
+                              }}
+                            >
+                              {card.icon}
+                            </div>
+                            <span
+                              className="text-4xl font-black font-mono opacity-40"
+                              style={{ color: card.accent }}
+                            >
+                              {card.num}
+                            </span>
                           </div>
-                          <span
-                            className="text-3xl font-black font-mono opacity-20"
-                            style={{ color: card.accent }}
-                          >
-                            {card.num}
-                          </span>
+                          <div className="mb-1">
+                            <span
+                              className="text-[10px] font-mono tracking-widest uppercase opacity-60"
+                              style={{ color: card.accent }}
+                            >
+                              {card.subtitle}
+                            </span>
+                          </div>
+                          <h3 className="text-lg font-serif font-bold mb-3 leading-tight text-white">
+                            {card.title}
+                          </h3>
+                          <p className="text-sm text-white/50 leading-relaxed font-sans">
+                            Tap to explore &rarr;
+                          </p>
                         </div>
-                        <p className="text-sm text-black/80 leading-relaxed font-sans mb-6">
-                          {card.description}
-                        </p>
-                        <div className="flex items-baseline gap-2">
-                          <span
-                            className="text-3xl font-bold font-serif"
-                            style={{ color: card.accent }}
-                          >
-                            {card.stat}
-                          </span>
-                          <span className="text-[10px] font-mono uppercase tracking-widest text-black/40">
-                            {card.statLabel}
-                          </span>
+                        <div
+                          className="[grid-area:stack] backface-hidden rounded-2xl bg-white p-6"
+                          style={{ transform: "rotateY(180deg)" }}
+                        >
+                          <div className="flex items-start justify-between mb-5">
+                            <div
+                              className="w-9 h-9 rounded-xl flex items-center justify-center"
+                              style={{
+                                backgroundColor: `${card.accent}15`,
+                                color: card.accent,
+                              }}
+                            >
+                              {card.icon}
+                            </div>
+                            <span
+                              className="text-2xl font-black font-mono opacity-20"
+                              style={{ color: card.accent }}
+                            >
+                              {card.num}
+                            </span>
+                          </div>
+                          <p className="text-sm text-black/80 leading-relaxed font-sans mb-5">
+                            {card.description}
+                          </p>
+                          <div className="flex items-baseline gap-2">
+                            <span
+                              className="text-2xl font-bold font-serif"
+                              style={{ color: card.accent }}
+                            >
+                              {card.stat}
+                            </span>
+                            <span className="text-[10px] font-mono uppercase tracking-widest text-black/40">
+                              {card.statLabel}
+                            </span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </motion.div>
-                </div>
-              ))}
-            </div>
+                    </motion.div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              // eslint-disable-next-line jsx-a11y/no-static-element-interactions
+              <div
+                ref={scrollContainerRef}
+                className="flex gap-6 overflow-x-auto pb-8 scrollbar-hide cursor-grab active:cursor-grabbing select-none"
+                style={{
+                  scrollbarWidth: "none",
+                  msOverflowStyle: "none",
+                  scrollBehavior: "smooth",
+                }}
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseUp}
+                // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === "ArrowRight")
+                    scrollContainerRef.current?.scrollBy({
+                      left: 300,
+                      behavior: "smooth",
+                    });
+                  if (e.key === "ArrowLeft")
+                    scrollContainerRef.current?.scrollBy({
+                      left: -300,
+                      behavior: "smooth",
+                    });
+                }}
+              >
+                {howItWorksCards.map((card, idx) => (
+                  <div
+                    key={idx}
+                    className="shrink-0 w-85 md:w-100 snap-start"
+                    style={{ perspective: "1000px" }}
+                    onMouseEnter={() => setFlippedIdx(idx)}
+                    onMouseLeave={() => setFlippedIdx(null)}
+                  >
+                    <motion.div
+                      initial={{ opacity: 0, y: 30 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      viewport={{ once: true, margin: "-50px" }}
+                      transition={{ duration: 0.5, delay: idx * 0.1 }}
+                    >
+                      <div
+                        className="transition-transform duration-700 ease-in-out rounded-2xl border border-white/10 grid [grid-template-areas:'stack'] h-[420px]"
+                        style={{
+                          transformStyle: "preserve-3d",
+                          transform:
+                            flippedIdx === idx
+                              ? "rotateY(180deg)"
+                              : "rotateY(0deg)",
+                        }}
+                      >
+                        <div className="[grid-area:stack] backface-hidden rounded-2xl bg-black p-8">
+                          <div className="flex items-start justify-between mb-8">
+                            <div
+                              className="w-10 h-10 rounded-xl flex items-center justify-center"
+                              style={{
+                                backgroundColor: `${card.accent}18`,
+                                color: card.accent,
+                              }}
+                            >
+                              {card.icon}
+                            </div>
+                            <span
+                              className="text-5xl font-black font-mono opacity-40"
+                              style={{ color: card.accent }}
+                            >
+                              {card.num}
+                            </span>
+                          </div>
+                          <div className="mb-2">
+                            <span
+                              className="text-[10px] font-mono tracking-widest uppercase opacity-60"
+                              style={{ color: card.accent }}
+                            >
+                              {card.subtitle}
+                            </span>
+                          </div>
+                          <h3 className="text-xl font-serif font-bold mb-4 leading-tight text-white">
+                            {card.title}
+                          </h3>
+                          <p className="text-sm text-white/50 leading-relaxed font-sans">
+                            Hover to explore &rarr;
+                          </p>
+                        </div>
+                        <div
+                          className="[grid-area:stack] backface-hidden rounded-2xl bg-white p-8"
+                          style={{ transform: "rotateY(180deg)" }}
+                        >
+                          <div className="flex items-start justify-between mb-6">
+                            <div
+                              className="w-10 h-10 rounded-xl flex items-center justify-center"
+                              style={{
+                                backgroundColor: `${card.accent}15`,
+                                color: card.accent,
+                              }}
+                            >
+                              {card.icon}
+                            </div>
+                            <span
+                              className="text-3xl font-black font-mono opacity-20"
+                              style={{ color: card.accent }}
+                            >
+                              {card.num}
+                            </span>
+                          </div>
+                          <p className="text-sm text-black/80 leading-relaxed font-sans mb-6">
+                            {card.description}
+                          </p>
+                          <div className="flex items-baseline gap-2">
+                            <span
+                              className="text-3xl font-bold font-serif"
+                              style={{ color: card.accent }}
+                            >
+                              {card.stat}
+                            </span>
+                            <span className="text-[10px] font-mono uppercase tracking-widest text-black/40">
+                              {card.statLabel}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </section>
 

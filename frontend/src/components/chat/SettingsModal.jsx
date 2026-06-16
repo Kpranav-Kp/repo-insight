@@ -1,4 +1,4 @@
-import { Sun, Moon, Check } from "lucide-react";
+import { Sun, Moon, Check, AlertCircle } from "lucide-react";
 import { useState } from "react";
 
 import { useTheme } from "@/components/ThemeToggle";
@@ -11,19 +11,35 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { request } from "@/lib/api";
 
 export function SettingsModal({ open, onOpenChange, user, onUsernameChange }) {
   const { theme, toggleTheme } = useTheme();
   const isDark = theme === "dark";
   const [newUsername, setNewUsername] = useState(user?.name || "");
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
 
-  const handleSaveUsername = () => {
-    if (newUsername.trim()) {
+  const handleSaveUsername = async () => {
+    if (!newUsername.trim() || saving) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await request("/auth/username/", {
+        method: "PATCH",
+        body: JSON.stringify({ username: newUsername.trim() }),
+      });
       localStorage.setItem("username", newUsername.trim());
       onUsernameChange?.(newUsername.trim());
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to update username",
+      );
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -116,17 +132,32 @@ export function SettingsModal({ open, onOpenChange, user, onUsernameChange }) {
               <Button
                 size="sm"
                 onClick={handleSaveUsername}
-                disabled={!newUsername.trim()}
+                disabled={!newUsername.trim() || saving}
                 className={`rounded-xl ${
                   isDark
                     ? "bg-white text-black hover:bg-white/90"
                     : "bg-[#000000] text-white hover:bg-[#2541B2]"
                 }`}
               >
-                {saved ? <Check className="h-4 w-4" /> : "Save"}
+                {saving ? (
+                  <span className="flex items-center gap-1.5">
+                    <span className="animate-spin">⟳</span>
+                    Saving...
+                  </span>
+                ) : saved ? (
+                  <Check className="h-4 w-4" />
+                ) : (
+                  "Save"
+                )}
               </Button>
             </div>
-            {saved && (
+            {error && (
+              <p className="flex items-center gap-1.5 text-xs text-red-500">
+                <AlertCircle className="h-3.5 w-3.5" />
+                {error}
+              </p>
+            )}
+            {saved && !error && (
               <p className="text-xs text-emerald-500">Username updated!</p>
             )}
           </div>

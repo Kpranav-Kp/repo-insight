@@ -1,6 +1,7 @@
-# backend/core/services/agents/views.py
+import logging
 import re
 
+import requests
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.db import transaction
@@ -12,7 +13,13 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import ConversationSession, LearnerProfile, Recommendation, Repository
+from .models import (
+    ConversationSession,
+    LearnerProfile,
+    Recommendation,
+    Repository,
+    UserProfile,
+)
 from .serializers import (
     ChatMessageSerializer,
     ConversationSessionSerializer,
@@ -24,6 +31,7 @@ from .serializers import (
 from .tasks import analyze_repository_task, run_chat_task
 
 # Create your views here.
+logger = logging.getLogger(__name__)
 
 
 def is_valid_github_url(url: str) -> bool:
@@ -37,49 +45,69 @@ class RepositoryAnalyzeView(APIView):
     def post(self, request):
         url = request.data.get("url")
         if not url:
+            logger.warning("RepositoryAnalyzeView: URL is required")
             return Response(
                 {"error": "URL is required."}, status=status.HTTP_400_BAD_REQUEST
             )
 
         url = url.strip()
         if not is_valid_github_url(url):
+            logger.warning(f"RepositoryAnalyzeView: Invalid GitHub URL: {url}")
             return Response(
                 {"error": "Invalid GitHub repository URL."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        with transaction.atomic():
-            repo, _ = Repository.objects.select_for_update().get_or_create(url=url)
-
-            if repo.status == "completed" and repo.index_path:
-                return Response(RepositorySerializer(repo).data)
-
-            if repo.status == "processing":
-                return Response(
-                    {
-                        "message": "Repository analysis already in progress.",
-                        "repository_id": repo.pk,
-                        "task_id": repo.task_id,
-                    },
-                    status=status.HTTP_202_ACCEPTED,
+        try:
+            with transaction.atomic():
+                repo, created = Repository.objects.select_for_update().get_or_create(
+                    url=url
                 )
 
-            repo.status = "processing"
-            repo.error_message = ""
-            repo.save()
+                if repo.status == "completed" and repo.index_path:
+                    logger.info(
+                        f"RepositoryAnalyzeView: Repository already completed: {repo.pk}"
+                    )
+                    return Response(RepositorySerializer(repo).data)
 
-        async_result = analyze_repository_task.delay(repo.pk)
+                if repo.status == "processing":
+                    logger.info(
+                        f"RepositoryAnalyzeView: Repository already processing: {repo.pk}"
+                    )
+                    return Response(
+                        {
+                            "message": "Repository analysis already in progress.",
+                            "repository_id": repo.pk,
+                            "task_id": repo.task_id,
+                        },
+                        status=status.HTTP_202_ACCEPTED,
+                    )
 
-        repo.task_id = async_result.id
-        repo.save(update_fields=["task_id"])
+                repo.status = "processing"
+                repo.error_message = ""
+                repo.save()
 
-        return Response(
-            {
-                "message": "Repository analysis started.",
-                "repository_id": repo.pk,
-                "task_id": async_result.id,
-            }
-        )
+            async_result = analyze_repository_task.delay(repo.pk)
+
+            repo.task_id = async_result.id
+            repo.save(update_fields=["task_id"])
+
+            logger.info(
+                f"RepositoryAnalyzeView: Started analysis for repo {repo.pk}, task {async_result.id}"
+            )
+            return Response(
+                {
+                    "message": "Repository analysis started.",
+                    "repository_id": repo.pk,
+                    "task_id": async_result.id,
+                }
+            )
+        except Exception as e:
+            logger.exception(f"RepositoryAnalyzeView: Failed to start analysis: {e}")
+            return Response(
+                {"error": "Failed to start repository analysis"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class RepositoryStatusView(APIView):
@@ -236,17 +264,69 @@ class LearnerProfileView(APIView):
         return Response(serializer.data)
 
 
+class UpdateUsernameView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request):
+        new_username = request.data.get("username", "").strip()
+        if not new_username:
+            return Response({"error": "Username is required"}, status=400)
+
+        if (
+            User.objects.filter(username=new_username)
+            .exclude(pk=request.user.pk)
+            .exists()
+        ):
+            return Response({"error": "Username already taken"}, status=400)
+
+        request.user.username = new_username
+        request.user.save()
+        return Response({"username": new_username})
+
+
+class ResendVerificationView(APIView):
+    permission_classes = []
+
+    def post(self, request):
+        email = request.data.get("email", "").strip()
+        if not email:
+            return Response({"error": "Email is required"}, status=400)
+
+        try:
+            resp = requests.post(
+                f"{settings.SUPABASE_URL}/auth/v1/resend",
+                headers={
+                    "apikey": settings.SUPABASE_PUBLISHABLE_KEY,
+                    "Content-Type": "application/json",
+                },
+                json={"type": "signup", "email": email},
+                timeout=10,
+            )
+            if not resp.ok:
+                return Response(
+                    {"error": "Failed to resend verification email"},
+                    status=resp.status_code,
+                )
+        except requests.RequestException as e:
+            return Response({"error": f"Unable to send email: {e}"}, status=502)
+
+        return Response({"message": "Verification email sent"})
+
+
 class SignupView(APIView):
     permission_classes = []
 
     def post(self, request):
-        print("Signup request data:", request.data)
         username = request.data.get("username")
         email = request.data.get("email")
         password = request.data.get("password")
+        password2 = request.data.get("password2")
 
-        if not username or not email or not password:
+        if not username or not email or not password or not password2:
             return Response({"error": "All fields required"}, status=400)
+
+        if password != password2:
+            return Response({"error": "Passwords do not match"}, status=400)
 
         if User.objects.filter(username=username).exists():
             return Response({"error": "Username taken"}, status=400)
@@ -265,6 +345,9 @@ class LoginView(APIView):
     def post(self, request):
         email = request.data.get("email")
         password = request.data.get("password")
+
+        if not email or not password:
+            return Response({"error": "Email and password required"}, status=400)
 
         try:
             user = User.objects.get(email=email)
@@ -307,6 +390,133 @@ class LogoutView(APIView):
         response = Response({"message": "Logged out"})
         response.delete_cookie("access_token")
         response.delete_cookie("refresh_token")
+        return response
+
+
+class SupabaseLoginView(APIView):
+    permission_classes = []
+
+    def post(self, request):
+        access_token = request.data.get("access_token")
+        if not access_token:
+            logger.warning("SupabaseLoginView: Missing access_token")
+            return Response({"error": "access_token required"}, status=400)
+
+        # Verify token and get user info via Supabase REST API
+        try:
+            user_resp = requests.get(
+                f"{settings.SUPABASE_URL}/auth/v1/user",
+                headers={
+                    "Authorization": f"Bearer {access_token}",
+                    "apikey": settings.SUPABASE_PUBLISHABLE_KEY,
+                },
+                timeout=10,
+            )
+        except requests.RequestException as e:
+            logger.exception(
+                f"SupabaseLoginView: Failed to verify token with Supabase: {e}"
+            )
+            return Response({"error": f"Unable to verify token: {e}"}, status=502)
+
+        if not user_resp.ok:
+            logger.warning(
+                f"SupabaseLoginView: Supabase token validation failed: {user_resp.status_code}"
+            )
+            return Response(
+                {"error": "Invalid or expired token"},
+                status=401,
+            )
+
+        user_data = user_resp.json()
+        email = user_data.get("email", "")
+        supabase_uid = user_data.get("id", "")
+        email_confirmed_at = user_data.get("email_confirmed_at")
+
+        if not email or not supabase_uid:
+            logger.warning(
+                "SupabaseLoginView: Invalid token payload - missing email or supabase_uid"
+            )
+            return Response({"error": "Invalid token payload"}, status=400)
+
+        provider = user_data.get("app_metadata", {}).get("provider", "")
+        is_oauth = provider != "email" and provider != ""
+        email_verified = user_data.get("user_metadata", {}).get("email_verified", False)
+
+        if not email_confirmed_at and not is_oauth and not email_verified:
+            logger.info(f"SupabaseLoginView: Email not verified for {email}")
+            return Response(
+                {
+                    "error": "Please verify your email before signing in. Check your inbox for the verification link."
+                },
+                status=403,
+            )
+
+        # Use atomic transaction with get_or_create to prevent race conditions
+        try:
+            with transaction.atomic():
+                # First try to find existing profile by supabase_uid
+                profile = (
+                    UserProfile.objects.select_for_update()
+                    .filter(supabase_uid=supabase_uid)
+                    .first()
+                )
+                if profile:
+                    user = profile.user
+                    logger.info(
+                        f"SupabaseLoginView: Found existing profile for supabase_uid {supabase_uid}"
+                    )
+                else:
+                    # Try to find user by email
+                    user = User.objects.select_for_update().filter(email=email).first()
+                    if user:
+                        profile, created = UserProfile.objects.get_or_create(user=user)
+                        if created or profile.supabase_uid != supabase_uid:
+                            profile.supabase_uid = supabase_uid
+                            profile.email_verified = True
+                            profile.save()
+                        logger.info(
+                            f"SupabaseLoginView: Linked existing user {user.username} to supabase_uid {supabase_uid}"
+                        )
+                    else:
+                        # Create new user with unique username
+                        username = email.split("@")[0].replace(".", "_")
+                        base_username = username
+                        counter = 1
+                        while User.objects.filter(username=username).exists():
+                            username = f"{base_username}_{counter}"
+                            counter += 1
+
+                        user = User.objects.create_user(username=username, email=email)
+                        user.set_unusable_password()
+                        user.save()
+
+                        profile = UserProfile.objects.create(
+                            user=user,
+                            supabase_uid=supabase_uid,
+                            email_verified=True,
+                        )
+        except Exception as e:
+            return Response({"error": f"Failed to create user: {str(e)}"}, status=500)
+
+        refresh = RefreshToken.for_user(user)
+        access = str(refresh.access_token)
+        refresh_token = str(refresh)
+
+        response = JsonResponse({"username": user.username, "email": user.email})
+        response.set_cookie(
+            "access_token",
+            access,
+            httponly=True,
+            secure=settings.SIMPLE_JWT["AUTH_COOKIE_SECURE"],
+            samesite=settings.SIMPLE_JWT["AUTH_COOKIE_SAMESITE"],
+        )
+        response.set_cookie(
+            "refresh_token",
+            refresh_token,
+            httponly=True,
+            secure=settings.SIMPLE_JWT["AUTH_COOKIE_SECURE"],
+            samesite=settings.SIMPLE_JWT["AUTH_COOKIE_SAMESITE"],
+        )
         return response
 
 

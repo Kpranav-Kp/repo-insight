@@ -9,10 +9,12 @@ import {
 
 import { ThemeProvider } from "@/components/ThemeToggle";
 
+import AuthCallback from "./components/AuthCallback";
 import ChatPage from "./components/ChatPage";
 import LandingPage from "./components/LandingPage";
 import Login from "./components/Login";
 import Signup from "./components/Signup";
+import VerifyEmail from "./components/VerifyEmail";
 
 function ProtectedRoute({ children }) {
   const [isAuthenticated, setIsAuthenticated] = useState(
@@ -47,6 +49,8 @@ function AppRoutes() {
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
+      <Route path="/auth/callback" element={<AuthCallback />} />
+      <Route path="/verify-email" element={<VerifyEmail />} />
       <Route
         path="/chat"
         element={
