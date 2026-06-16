@@ -16,11 +16,11 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
-
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load environment variables from repo root .env
+load_dotenv(dotenv_path=BASE_DIR.parent / ".env")
 
 
 # Quick-start development settings - unsuitable for production
@@ -33,8 +33,7 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 DEBUG = os.getenv("DEBUG") == "True"
 
 ALLOWED_HOSTS = [
-    "localhost",
-    "127.0.0.1",
+    h.strip() for h in os.getenv("ALLOWED_HOSTS", "").split(",") if h.strip()
 ]
 
 
@@ -85,8 +84,7 @@ SIMPLE_JWT = {
 }
 
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
+    o.strip() for o in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",") if o.strip()
 ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -117,7 +115,7 @@ WSGI_APPLICATION = "repoinsight.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": "repoinsight_db",
+        "NAME": os.getenv("DATABASE_NAME"),
         "USER": "repoinsight_user",
         "PASSWORD": os.getenv("DATABASE_PASSWORD"),
         "HOST": "localhost",
@@ -162,8 +160,8 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 
-CELERY_BROKER_URL = "redis://localhost:6379/0"
-CELERY_RESULT_BACKEND = "redis://localhost:6379/0"
+CELERY_BROKER_URL = os.getenv("REDIS_URL")
+CELERY_RESULT_BACKEND = os.getenv("REDIS_URL")
 
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", default="")
 os.environ["HF_HOME"] = os.getenv("HF_HOME", default="C:\\HFCache")
@@ -195,5 +193,4 @@ GITHUB_ISSUE_LIMIT = int(os.getenv("GITHUB_ISSUE_LIMIT", 300))
 GITHUB_PR_LIMIT = int(os.getenv("GITHUB_PR_LIMIT", 150))
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
-SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "")
 SUPABASE_PUBLISHABLE_KEY = os.getenv("SUPABASE_PUBLISHABLE_KEY", "")
