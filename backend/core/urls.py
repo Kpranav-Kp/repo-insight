@@ -7,6 +7,7 @@ from .views import (
     ChatSessionView,
     ClaimIssueView,
     LearnerProfileView,
+    NoSkillsView,
     RecommendationFeedbackView,
     RecommendationView,
     ReleaseIssueView,
@@ -71,5 +72,10 @@ urlpatterns = [
         "repositories/<int:repo_id>/release/<int:issue_number>/",
         ReleaseIssueView.as_view(),
         name="release-issue",
+    ),
+    path(
+        "chat/session/<int:session_id>/no-skills/",
+        NoSkillsView.as_view(),
+        name="no-skills",
     ),
 ]

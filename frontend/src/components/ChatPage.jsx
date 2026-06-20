@@ -1,5 +1,6 @@
 import { PanelRight } from "lucide-react";
 import { useState } from "react";
+import { Link } from "react-router-dom";
 
 import { ChatSidebar } from "@/components/chat/ChatSidebar";
 import { CurrentSession } from "@/components/chat/CurrentSession";
@@ -32,11 +33,7 @@ export default function ChatPage({ onLogout }) {
     setSidebarOpen(false);
   };
 
-  const handleLogout = async () => {
-    await fetch("/api/auth/logout/", {
-      method: "POST",
-      credentials: "include",
-    });
+  const handleLogout = () => {
     localStorage.removeItem("username");
     localStorage.removeItem("email");
     onLogout?.();
@@ -123,9 +120,12 @@ export default function ChatPage({ onLogout }) {
             >
               <PanelRight className="h-4 w-4" />
             </button>
-            <span className="text-sm font-mono tracking-widest uppercase text-white/50">
+            <Link
+              to="/"
+              className="text-sm font-orangevoyage tracking-widest text-white/50 hover:text-white/80 transition-colors"
+            >
               RepoInsight
-            </span>
+            </Link>
           </div>
 
           <CurrentSession key={chatKey} activeSession={activeSession} />

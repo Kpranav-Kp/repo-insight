@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import re
-
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
@@ -39,7 +37,7 @@ class SkillExtractor:
         "webhook",
     }
 
-    MATCH_THRESHOLD = 0.35
+    MATCH_THRESHOLD = 0.25
 
     def __init__(self, model=None, custom_skills: list[str] | None = None):
         self._model: SentenceTransformer | None = model
@@ -68,24 +66,14 @@ class SkillExtractor:
             return []
         emb = self._get_skill_embeddings()
         model = self._model
-        if emb is not None and model is not None:
-            text_vec = np.asarray(
-                model.encode([text], normalize_embeddings=True, show_progress_bar=False)
-            ).astype("float32")
-            sims = text_vec @ emb.T
-            mask = sims[0] > self.MATCH_THRESHOLD
-            found = {
-                self._skill_list[i] for i in range(len(self._skill_list)) if mask[i]
-            }
-        else:
-            found = set()
-            for skill in self._skill_list:
-                pattern = re.compile(
-                    rf"(?:^|\s)({re.escape(skill)})(?=\s|$)", re.IGNORECASE
-                )
-                if pattern.search(text):
-                    found.add(skill)
-
+        if emb is None or model is None:
+            return []
+        text_vec = np.asarray(
+            model.encode([text], normalize_embeddings=True, show_progress_bar=False)
+        ).astype("float32")
+        sims = text_vec @ emb.T
+        mask = sims[0] > self.MATCH_THRESHOLD
+        found = {self._skill_list[i] for i in range(len(self._skill_list)) if mask[i]}
         return sorted(found)
 
     def add_skills(self, skills: list[str]):
@@ -98,7 +86,10 @@ class SkillExtractor:
 
 
 def extract_issue_metadata(
-    title: str, body: str, labels: list[str], extractor: SkillExtractor | None = None
+    title: str,
+    body: str,
+    labels: list[str],
+    extractor: SkillExtractor | None = None,
 ) -> dict:
     if extractor is None:
         extractor = SkillExtractor()

@@ -4,19 +4,15 @@
 @custom-variant dark (&:is(.dark,.dark *));
 
 @font-face {
-  font-family: "Mileast";
-  src: url("https://db.onlinewebfonts.com/t/10a46d23641fd81998997964d79c9d58.eot");
-  src:
-    url("https://db.onlinewebfonts.com/t/10a46d23641fd81998997964d79c9d58.eot?#iefix")
-      format("embedded-opentype"),
-    url("https://db.onlinewebfonts.com/t/10a46d23641fd81998997964d79c9d58.woff2")
-      format("woff2"),
-    url("https://db.onlinewebfonts.com/t/10a46d23641fd81998997964d79c9d58.woff")
-      format("woff"),
-    url("https://db.onlinewebfonts.com/t/10a46d23641fd81998997964d79c9d58.ttf")
-      format("truetype"),
-    url("https://db.onlinewebfonts.com/t/10a46d23641fd81998997964d79c9d58.svg#Mileast")
-      format("svg");
+  font-family: "OrangeVoyage";
+  src: url("/fonts/OrangeVoyageDemo-Regular.otf") format("opentype");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+.font-orangevoyage {
+  font-family: "OrangeVoyage", "Abril Fatface", "Playfair Display", Georgia, serif;
 }
 
 @layer base {

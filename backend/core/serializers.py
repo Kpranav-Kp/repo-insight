@@ -98,7 +98,9 @@ class LearnerProfileSerializer(serializers.ModelSerializer):
 
 class StructuredSkillsSerializer(serializers.Serializer):
     skill = serializers.CharField(max_length=100)
-    band = serializers.ChoiceField(choices=["beginner", "intermediate", "advanced"])
+    band = serializers.ChoiceField(
+        choices=["heard_of", "beginner", "intermediate", "advanced"]
+    )
 
     def validate_skill(self, value):
         if not value.strip():

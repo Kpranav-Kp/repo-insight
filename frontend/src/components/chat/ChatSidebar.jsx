@@ -116,13 +116,16 @@ export function ChatSidebar({
                   onClick={() => onSelectSession?.(s)}
                   className={cn(
                     "w-full text-left truncate text-xs p-2.5 rounded-xl transition-all pr-8",
-                    activeSessionId === s.localId
-                      ? isDark
-                        ? "bg-white/10 text-white"
-                        : "bg-black/5 text-black"
-                      : isDark
+                    (() => {
+                      if (activeSessionId === s.localId) {
+                        return isDark
+                          ? "bg-white/10 text-white"
+                          : "bg-black/5 text-black";
+                      }
+                      return isDark
                         ? "text-white/40 hover:bg-white/5 hover:text-white/70"
-                        : "text-black/40 hover:bg-black/5 hover:text-black/70",
+                        : "text-black/40 hover:bg-black/5 hover:text-black/70";
+                    })(),
                   )}
                 >
                   <div className="truncate font-medium">

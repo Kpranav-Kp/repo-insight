@@ -299,12 +299,14 @@ export default function SpacePanel() {
         className="absolute inset-0 z-0 pointer-events-none"
       />
 
-      <Link
-        to="/"
-        className="relative z-10 text-[10px] font-mono tracking-widest text-[#1098F7] uppercase opacity-60 hover:opacity-100 transition-opacity"
-      >
-        RepoInsight
-      </Link>
+      <div className="relative z-10 flex flex-col items-start justify-center min-h-0 mt-8 md:mt-12">
+        <Link
+          to="/"
+          className="text-2xl md:text-3xl font-orangevoyage tracking-widest text-white/90"
+        >
+          RepoInsight
+        </Link>
+      </div>
 
       <div className="relative z-10 max-w-md my-auto">
         <AnimatePresence mode="wait">

@@ -1,4 +1,3 @@
-# backend/core/services/embeddings.py
 import json
 import os
 from collections import OrderedDict
@@ -72,7 +71,8 @@ class EmbeddingService:
         vectors = self.encode(list(texts))
 
         self.index = faiss.IndexFlatIP(self.dimension)
-        self.index.add(vectors)  # type: ignore
+        self.index.add(vectors)
+
         self.metadata = {}
         self.id_to_index = {}
         self.index_to_id = {}
@@ -87,7 +87,7 @@ class EmbeddingService:
             return []
 
         query_vec = self.encode([query])
-        scores, indices = self.index.search(query_vec, top_k)  # type: ignore
+        scores, indices = self.index.search(query_vec, top_k)
 
         results = []
         for score, idx in zip(scores[0], indices[0], strict=False):

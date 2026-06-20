@@ -122,7 +122,16 @@ def build_graph():
         },
     )
 
-    graph.add_edge("code_assist", END)
+    graph.add_conditional_edges(
+        "code_assist",
+        route_after_guidance,
+        {
+            "guidance": "guidance",
+            "code_assist": "code_assist",
+            "review": "review",
+            END: END,
+        },
+    )
     graph.add_edge("review", END)
 
     return graph.compile()

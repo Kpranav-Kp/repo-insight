@@ -2,7 +2,6 @@ from collections import defaultdict, deque
 
 
 def _build_adjacency(graph):
-    """Build bidirectional skill↔issue and issue↔issue maps from graph edges."""
     skill_to_issues: dict[str, set[str]] = defaultdict(set)
     issue_to_skills: dict[str, set[str]] = defaultdict(set)
     issue_to_issues: dict[str, set[str]] = defaultdict(set)
@@ -17,7 +16,6 @@ def _build_adjacency(graph):
             issue_to_issues[edge["source_id"]].add(edge["target_id"])
             issue_to_issues[edge["target_id"]].add(edge["source_id"])
 
-    # Also include skills from issue metadata that may not have embedding edges
     for issue_meta in graph.issues.meta:
         issue_id = issue_meta.get("id", "")
         for skill in issue_meta.get("skills", []):
@@ -38,7 +36,6 @@ def generate_learning_path(graph, user_skills: list[str]) -> str:
     if not unknown:
         return "You already know all the skills aligned with this repository's open issues."
 
-    # BFS from user skills: skill → issue → issue → skill
     visited_skills = set(user_skills_lower)
     visited_issues: set[str] = set()
     queue: deque = deque()

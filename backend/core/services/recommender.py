@@ -1,13 +1,22 @@
 import json
 import math
 import os
+from collections import Counter
 from datetime import datetime
+from typing import cast
 
 from django.conf import settings
 
 from .github import GitHubClient, GitHubError, RateLimitError
 from .semantic_graph import SemanticGraph
 from .skills import SkillExtractor, extract_issue_metadata
+
+BAND_WEIGHTS = {
+    "heard_of": 0.1,
+    "beginner": 0.3,
+    "intermediate": 0.6,
+    "advanced": 1.0,
+}
 
 
 class RecommendationEngine:
@@ -18,6 +27,19 @@ class RecommendationEngine:
         self.skill_extractor = SkillExtractor(model=self.graph.issues._service.model)
         self._is_built = False
         self._repo_language: str | None = None
+
+    @staticmethod
+    def _is_skill_like(name: str) -> bool:
+        nl = name.lower()
+        if nl in SkillExtractor.SKILLS_DB:
+            return True
+        if "@" in nl:
+            return False
+        if nl.count("-") >= 2:
+            return False
+        if len(nl) < 2:
+            return False
+        return True
 
     def build_from_repository(self, repo_url: str) -> dict:
         try:
@@ -37,8 +59,6 @@ class RecommendationEngine:
             raise RuntimeError(f"GitHub rate limit hit: {e}") from e
         except GitHubError as e:
             raise RuntimeError(f"Failed to fetch PRs: {e}") from e
-
-        # --- Dynamic skill discovery ---
 
         try:
             languages = self.github.fetch_languages(repo_url)
@@ -61,25 +81,27 @@ class RecommendationEngine:
         except (RateLimitError, GitHubError):
             dep_skills = []
 
-        # Build the dynamic vocabulary for embedding matching
         repo_skills_lower = {s.lower() for s in repo_languages + topics + dep_skills}
         self.skill_extractor.add_skills(sorted(repo_skills_lower))
 
-        # Ground-truth skills to inject on every issue
-        repo_ground_truth = {s.lower() for s in repo_languages + dep_skills}
+        for skill_name in sorted(repo_skills_lower):
+            if self._is_skill_like(skill_name):
+                self.graph.add_skill(skill_name)
 
-        all_skills = set()
+        skill_counter: Counter = Counter()
 
         for issue in issues:
             metadata = extract_issue_metadata(
-                issue.title, issue.body, issue.labels, extractor=self.skill_extractor
+                issue.title,
+                issue.body,
+                issue.labels,
+                extractor=self.skill_extractor,
             )
             skills = metadata["skills"]
             difficulty = metadata["difficulty"]
-            for gt_skill in repo_ground_truth:
-                if gt_skill not in {s.lower() for s in skills}:
-                    skills.append(gt_skill)
-            all_skills.update(skills)
+
+            skill_counter.update(s.lower() for s in skills)
+
             self.graph.add_issue(
                 {
                     "id": str(issue.number),
@@ -92,6 +114,7 @@ class RecommendationEngine:
                     "created_at": issue.created_at,
                 }
             )
+
         for pr in prs:
             if not pr.linked_issue_numbers:
                 self.graph.add_pr(
@@ -116,31 +139,51 @@ class RecommendationEngine:
         self.graph.build_edges()
         self._is_built = True
 
+        most_common = skill_counter.most_common()
+        skills_found = [skill for skill, _ in most_common if self._is_skill_like(skill)]
+
         return {
             "repository_url": repo_url,
             "issues_indexed": len(issues),
             "prs_indexed": len(prs),
-            "skills_found": sorted(all_skills),
+            "skills_found": skills_found,
             "graph_stats": self.graph.stats(),
         }
 
     def recommend(
         self,
-        user_skills: list[str],
+        user_skills: list[str] | list[dict],
         top_k: int = 5,
         exclude_issue_ids: set[str] | None = None,
     ) -> list[dict]:
         if not self._is_built:
             raise RuntimeError("Graph not built. Call build_from_repository() first.")
 
+        if user_skills and isinstance(user_skills[0], dict):
+            dict_skills = cast("list[dict]", user_skills)
+            user_skill_names = [s["skill"] for s in dict_skills]
+            skill_bands = {
+                s["skill"].lower(): s.get("band", "intermediate") for s in dict_skills
+            }
+        else:
+            str_skills = cast("list[str]", user_skills) if user_skills else []
+            user_skill_names = str_skills
+            skill_bands = {}
+
         exclude_issue_ids = exclude_issue_ids or set()
 
-        # Step 1: FAISS skill-to-issue retrieval (generous top_k)
-        candidates = self.graph.skill_to_issue(user_skills, top_k=top_k * 3)
+        band_weights_for_search = {
+            skill: BAND_WEIGHTS.get(band, 0.3) for skill, band in skill_bands.items()
+        }
+        candidates = self.graph.skill_to_issue(
+            user_skill_names,
+            top_k=top_k * 3,
+            band_weights=band_weights_for_search,
+        )
+
         if not candidates:
             return []
 
-        # Step 2: Filter — open only & not resolved by merged PR & not claimed
         filtered = []
         resolved_ids = self._resolved_issue_ids()
         for cand in candidates:
@@ -156,7 +199,6 @@ class RecommendationEngine:
         if not filtered:
             return []
 
-        # Step 3: Multi-hop expansion via ISSUE_ISSUE_SIM edges
         candidate_ids = {c["id"] for c in filtered}
         expanded_ids = set(candidate_ids)
         for cid in list(candidate_ids):
@@ -169,29 +211,43 @@ class RecommendationEngine:
                 ):
                     expanded_ids.add(conn)
 
-        # Fetch metadata for expanded issues not already in filtered
         seen_ids = {c["id"] for c in filtered}
         if expanded_ids - seen_ids:
             extra = self.graph.get_issues_by_ids(expanded_ids - seen_ids)
             filtered.extend(extra)
 
-        user_skills_set = set(s.lower() for s in user_skills)
+        user_skills_set = set(s.lower() for s in user_skill_names)
         now = datetime.now()
 
         scored = []
         for cand in filtered:
             issue_id = cand["id"]
             issue_skills = set(s.lower() for s in cand.get("skills", []))
-            semantic_score = float(cand.get("score", 0))
+            edge_score = float(cand.get("score", 0))
 
             overlap_skills = user_skills_set & issue_skills
+
+            total_weight = 0.0
+            matched_weight = 0.0
+            for us in user_skills_set:
+                bw = BAND_WEIGHTS.get(skill_bands.get(us, "intermediate"), 0.3)
+                total_weight += bw
+                if us in issue_skills:
+                    matched_weight += bw
+
             if issue_skills:
-                skill_overlap = len(overlap_skills) / len(issue_skills)
-                user_coverage = (
-                    len(overlap_skills) / len(user_skills_set)
-                    if user_skills_set
-                    else 0.0
+                issue_weight = 0.0
+                for is_ in issue_skills:
+                    bw = BAND_WEIGHTS.get(skill_bands.get(is_, "intermediate"), 0.3)
+                    issue_weight += bw if is_ in overlap_skills else 0.0
+                total_issue_weight = sum(
+                    BAND_WEIGHTS.get(skill_bands.get(is_, "intermediate"), 0.3)
+                    for is_ in issue_skills
                 )
+                skill_overlap = (
+                    issue_weight / total_issue_weight if total_issue_weight else 0.0
+                )
+                user_coverage = matched_weight / total_weight if total_weight else 0.0
             else:
                 skill_overlap = 0.0
                 user_coverage = 0.0
@@ -200,7 +256,6 @@ class RecommendationEngine:
             label_bonus = self.graph.get_issue_label_bonus(issue_id)
             normalized_label = label_bonus / 0.3 if label_bonus else 0.0
 
-            # Recency: exp decay, 0 = very old, 1 = fresh
             created_str = cand.get("created_at", "")
             recency_score = 1.0
             if created_str:
@@ -211,12 +266,12 @@ class RecommendationEngine:
                 except (ValueError, TypeError):
                     pass
 
-            skill_component = skill_overlap if issue_skills else semantic_score
-            coverage_component = user_coverage if issue_skills else semantic_score * 0.5
+            skill_component = skill_overlap if issue_skills else edge_score
+            coverage_component = user_coverage if issue_skills else edge_score * 0.5
 
             final_score = (
                 0.25 * skill_component
-                + 0.25 * semantic_score
+                + 0.25 * edge_score
                 + 0.15 * coverage_component
                 + 0.10 * difficulty_score
                 + 0.10 * normalized_label
@@ -225,9 +280,9 @@ class RecommendationEngine:
 
             cand["skill_overlap"] = sorted(overlap_skills)
             cand["match_score"] = round(
-                skill_overlap if issue_skills else semantic_score, 4
+                skill_overlap if issue_skills else edge_score, 4
             )
-            cand["semantic_score"] = round(semantic_score, 4)
+            cand["edge_score"] = round(edge_score, 4)
             cand["difficulty_score"] = difficulty_score
             cand["label_bonus"] = label_bonus
             cand["recency_score"] = round(recency_score, 4)
@@ -237,12 +292,10 @@ class RecommendationEngine:
 
         scored.sort(key=lambda x: x["combined_score"], reverse=True)
 
-        # Step 4: Diversity re-ranking — demote clustered issues
         diverse = self._diversify(scored, top_k)
         return diverse[:top_k]
 
     def _resolved_issue_ids(self) -> set[str]:
-        """Return set of issue IDs that have been resolved by a merged PR."""
         resolved = set()
         for edge in self.graph.adj.get_edges(self.graph.ISSUE_PR_HIST):
             resolved.add(edge["source_id"])
@@ -282,10 +335,6 @@ class RecommendationEngine:
         return selected
 
     def save_index(self, directory: str):
-        """
-        Persist the FAISS index + metadata to disk.
-        Note: graph edges are in-memory and must be rebuilt on load.
-        """
         if not self._is_built:
             raise RuntimeError("Nothing to save. Build the graph first.")
 

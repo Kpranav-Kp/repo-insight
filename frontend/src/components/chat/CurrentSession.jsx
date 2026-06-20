@@ -46,6 +46,9 @@ export function CurrentSession({ activeSession }) {
   const [error, setError] = useState(null);
   const [repoSkills, setRepoSkills] = useState([]);
   const [selectedSkills, setSelectedSkills] = useState([]);
+  const [extraSkillsInput, setExtraSkillsInput] = useState("");
+  const [_showExtraSkills, setShowExtraSkills] = useState(false);
+  const [_hasContributionHistory, setHasContributionHistory] = useState(false);
   const [selectedIssueId, setSelectedIssueId] = useState(
     activeSession?.selectedIssueId || null,
   );
@@ -157,19 +160,100 @@ export function CurrentSession({ activeSession }) {
             recommendations: recs.recommendations,
           },
         ]);
-      } else if (recs.learning_path) {
+        setStage("recommendations");
+      } else {
+        // No issues found
         setRecommendations([]);
-        setMessages((prev) => [
-          ...prev,
-          { role: "ai", content: recs.learning_path },
-        ]);
+        setHasContributionHistory(recs.has_contribution_history || false);
+        if (recs.has_contribution_history) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              role: "ai",
+              content:
+                "No open issues match your current skill set right now. Since you've contributed to this repo before — do you have a new idea or feature you'd like to work on? I can help you scope it out.",
+            },
+          ]);
+          setStage("ready");
+        } else {
+          setMessages((prev) => [
+            ...prev,
+            {
+              role: "ai",
+              content: `No open issues currently match your skills. This is your first time contributing here — do you have any additional skills (not listed) that might be useful for this repo? If so, add them below so I can check again.`,
+            },
+          ]);
+          setShowExtraSkills(true);
+          setStage("extra_skills");
+        }
       }
-
-      setStage("recommendations");
     } catch (err) {
       console.error("Error fetching recommendations:", err);
       setError("Failed to get recommendations. Please try again.");
       setStage("skills");
+    }
+  };
+
+  const submitNoSkills = async () => {
+    setStage("thinking");
+    setError(null);
+    try {
+      const roadmap = await api.submitNoSkills(sessionId);
+      setMessages((prev) => [
+        ...prev,
+        { role: "ai", content: roadmap.roadmap },
+      ]);
+      setStage("ready");
+    } catch (err) {
+      console.error("Error fetching roadmap:", err);
+      setError("Failed to load roadmap. Please try again.");
+      setStage("skills");
+    }
+  };
+
+  const submitExtraSkills = async () => {
+    const extras = extraSkillsInput
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (extras.length === 0) return;
+
+    const allSkills = [
+      ...selectedSkills,
+      ...extras.map((skill) => ({ skill, band: "beginner" })),
+    ];
+    setStage("thinking");
+    setError(null);
+    try {
+      await api.submitExtraSkills(sessionId, allSkills);
+      const recs = await api.getRecommendations(sessionId);
+      if (recs.recommendations && recs.recommendations.length > 0) {
+        setRecommendations(recs.recommendations);
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "ai",
+            content: `Found ${recs.recommendations.length} issues now! Select one to start working.`,
+            recommendations: recs.recommendations,
+          },
+        ]);
+        setStage("recommendations");
+      } else {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "ai",
+            content:
+              "Still no matching issues. Keep an eye on this repo — new issues open frequently and one may match your skills soon.",
+          },
+        ]);
+        setShowExtraSkills(false);
+        setStage("ready");
+      }
+    } catch (err) {
+      console.error("Error with extra skills:", err);
+      setError("Failed to re-check. Please try again.");
+      setStage("extra_skills");
     }
   };
 
@@ -331,6 +415,8 @@ export function CurrentSession({ activeSession }) {
   if (isInitial) placeholderText = "Paste a GitHub repo URL...";
   else if (busy) placeholderText = "Working...";
   else if (stage === "skills") placeholderText = "Select skills above...";
+  else if (stage === "extra_skills")
+    placeholderText = "Add extra skills (comma-separated)...";
   else if (stage === "recommendations")
     placeholderText = "Select an issue above...";
   else placeholderText = "Type a message...";
@@ -354,12 +440,17 @@ export function CurrentSession({ activeSession }) {
           ref={textareaRef}
           value={input}
           onChange={handleInputChange}
-          disabled={busy || (stage !== "ready" && stage !== "idle")}
+          disabled={
+            busy ||
+            (stage !== "ready" && stage !== "extra_skills" && stage !== "idle")
+          }
           onKeyDown={(e) => {
             if (
               e.key === "Enter" &&
               !e.shiftKey &&
-              (stage === "ready" || stage === "idle")
+              (stage === "ready" ||
+                stage === "idle" ||
+                stage === "extra_skills")
             ) {
               e.preventDefault();
               handleSend();
@@ -425,57 +516,136 @@ export function CurrentSession({ activeSession }) {
                   >
                     {skill}
                   </span>
-                  <div className="flex gap-2">
-                    {["beginner", "intermediate", "advanced"].map((band) => (
-                      <button
-                        key={band}
-                        onClick={() => {
-                          const existing = selectedSkills.find(
-                            (s) => s.skill === skill,
-                          );
-                          if (existing) {
-                            setSelectedSkills((prev) =>
-                              prev.map((s) =>
-                                s.skill === skill ? { skill, band } : s,
-                              ),
+                  <div className="flex gap-1.5">
+                    {["heard_of", "beginner", "intermediate", "advanced"].map(
+                      (band) => (
+                        <button
+                          key={band}
+                          onClick={() => {
+                            const existing = selectedSkills.find(
+                              (s) => s.skill === skill,
                             );
-                          } else {
-                            setSelectedSkills((prev) => [
-                              ...prev,
-                              { skill, band },
-                            ]);
-                          }
-                        }}
-                        className={`px-3 py-1 text-xs rounded-full border font-medium transition-all cursor-pointer ${
-                          selectedSkills.some(
-                            (s) => s.skill === skill && s.band === band,
-                          )
-                            ? isDark
-                              ? "bg-[#2541B2] text-white border-[#2541B2]"
-                              : "bg-[#2541B2] text-white border-[#2541B2]"
-                            : isDark
+                            if (existing && existing.band === band) {
+                              setSelectedSkills((prev) =>
+                                prev.filter((s) => s.skill !== skill),
+                              );
+                            } else {
+                              setSelectedSkills((prev) => {
+                                const filtered = prev.filter(
+                                  (s) => s.skill !== skill,
+                                );
+                                return [...filtered, { skill, band }];
+                              });
+                            }
+                          }}
+                          className={`px-2 py-1 text-[10px] rounded-full border font-medium transition-all cursor-pointer ${(() => {
+                            if (
+                              selectedSkills.some(
+                                (s) => s.skill === skill && s.band === band,
+                              )
+                            ) {
+                              return "bg-[#2541B2] text-white border-[#2541B2]";
+                            }
+                            return isDark
                               ? "bg-white/5 text-white/60 border-white/10 hover:bg-white/10"
-                              : "bg-black/5 text-black/60 border-black/10 hover:bg-black/10"
-                        }`}
-                      >
-                        {band.charAt(0).toUpperCase() + band.slice(1)}
-                      </button>
-                    ))}
+                              : "bg-black/5 text-black/60 border-black/10 hover:bg-black/10";
+                          })()}`}
+                        >
+                          {band === "heard_of"
+                            ? "Heard"
+                            : band.charAt(0).toUpperCase() + band.slice(1)}
+                        </button>
+                      ),
+                    )}
                   </div>
                 </div>
               ))}
             </div>
-            <button
-              onClick={submitSkillsAndGetRecommendations}
-              disabled={selectedSkills.length === 0}
-              className={`w-full py-2.5 font-medium rounded-xl disabled:opacity-40 transition-all cursor-pointer ${
-                isDark
-                  ? "bg-white text-black hover:bg-white/90"
-                  : "bg-[#000000] text-white hover:bg-[#2541B2]"
-              }`}
+            <div className="flex gap-3">
+              <button
+                onClick={submitSkillsAndGetRecommendations}
+                disabled={selectedSkills.length === 0}
+                className={`flex-1 py-2.5 font-medium rounded-xl disabled:opacity-40 transition-all cursor-pointer ${
+                  isDark
+                    ? "bg-white text-black hover:bg-white/90"
+                    : "bg-[#000000] text-white hover:bg-[#2541B2]"
+                }`}
+              >
+                Continue with {selectedSkills.length} skill
+                {selectedSkills.length !== 1 ? "s" : ""}
+              </button>
+              <button
+                onClick={submitNoSkills}
+                className={`py-2.5 px-4 font-medium rounded-xl transition-all cursor-pointer ${
+                  isDark
+                    ? "bg-white/5 text-white/60 border border-white/10 hover:bg-white/10 hover:text-white"
+                    : "bg-black/5 text-black/60 border border-black/10 hover:bg-black/10 hover:text-black"
+                }`}
+              >
+                No familiarity
+              </button>
+            </div>
+          </div>
+        </div>
+        {InputArea}
+      </div>
+    );
+  }
+
+  // Extra skills input for new users with no matching issues
+  if (stage === "extra_skills") {
+    return (
+      <div className="flex h-full flex-col">
+        <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
+          {messages.map((msg, i) => (
+            <MessageBubble
+              key={i}
+              msg={msg}
+              selectedIssueId={selectedIssueId}
+              onSelectIssue={selectIssue}
+              getButtonDisabledState={getButtonDisabledState}
+              getButtonClassName={getButtonClassName}
+              getButtonText={getButtonText}
+              getDifficultyClass={getDifficultyClass}
+              isDark={isDark}
+            />
+          ))}
+          <div
+            className={`max-w-2xl mx-auto rounded-2xl border p-6 space-y-4 ${
+              isDark ? "bg-white/2 border-white/6" : "bg-white border-black/6"
+            }`}
+          >
+            <h4
+              className={`text-sm font-semibold ${isDark ? "text-white" : "text-black"}`}
             >
-              Continue
-            </button>
+              Got extra skills not listed above?
+            </h4>
+            <div className="flex gap-2">
+              <input
+                value={extraSkillsInput}
+                onChange={(e) => setExtraSkillsInput(e.target.value)}
+                placeholder="e.g. docker, graphql, kubernetes"
+                className={`flex-1 px-3 py-2 text-sm rounded-xl border outline-none ${
+                  isDark
+                    ? "bg-white/5 border-white/10 text-white placeholder:text-white/25"
+                    : "bg-black/5 border-black/10 text-black placeholder:text-black/25"
+                }`}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") submitExtraSkills();
+                }}
+              />
+              <button
+                onClick={submitExtraSkills}
+                disabled={!extraSkillsInput.trim()}
+                className={`px-4 py-2 text-sm font-medium rounded-xl disabled:opacity-40 transition-all cursor-pointer ${
+                  isDark
+                    ? "bg-white text-black hover:bg-white/90"
+                    : "bg-[#000000] text-white hover:bg-[#2541B2]"
+                }`}
+              >
+                Check
+              </button>
+            </div>
           </div>
         </div>
         {InputArea}
@@ -683,13 +853,14 @@ function MessageBubble({
                         key={issue.id}
                         className={cn(
                           "border rounded-xl p-4 space-y-3 transition-all",
-                          isThisSelected
-                            ? isDark
-                              ? "border-[#2541B2] ring-1 ring-[#2541B2]/20 bg-[#2541B2]/5"
-                              : "border-[#2541B2] ring-1 ring-[#2541B2]/20 bg-[#2541B2]/5"
-                            : isDark
+                          (() => {
+                            if (isThisSelected) {
+                              return "border-[#2541B2] ring-1 ring-[#2541B2]/20 bg-[#2541B2]/5";
+                            }
+                            return isDark
                               ? "border-white/6 bg-white/2"
-                              : "border-black/6 bg-white",
+                              : "border-black/6 bg-white";
+                          })(),
                         )}
                       >
                         <div className="flex justify-between items-start gap-2">
@@ -775,13 +946,16 @@ function MessageBubble({
                   onClick={() => handleFeedback("good")}
                   className={cn(
                     "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition-colors",
-                    feedback === "good"
-                      ? isDark
-                        ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-                        : "bg-emerald-50 border-emerald-200 text-emerald-600"
-                      : isDark
+                    (() => {
+                      if (feedback === "good") {
+                        return isDark
+                          ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                          : "bg-emerald-50 border-emerald-200 text-emerald-600";
+                      }
+                      return isDark
                         ? "border-white/8 hover:bg-white/5 hover:text-white/60"
-                        : "border-black/8 hover:bg-black/5 hover:text-black/60",
+                        : "border-black/8 hover:bg-black/5 hover:text-black/60";
+                    })(),
                   )}
                 >
                   <ThumbsUp className="h-3.5 w-3.5" />
@@ -791,13 +965,16 @@ function MessageBubble({
                   onClick={() => handleFeedback("bad")}
                   className={cn(
                     "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition-colors",
-                    feedback === "bad"
-                      ? isDark
-                        ? "bg-red-500/10 border-red-500/20 text-red-400"
-                        : "bg-red-50 border-red-200 text-red-600"
-                      : isDark
+                    (() => {
+                      if (feedback === "bad") {
+                        return isDark
+                          ? "bg-red-500/10 border-red-500/20 text-red-400"
+                          : "bg-red-50 border-red-200 text-red-600";
+                      }
+                      return isDark
                         ? "border-white/8 hover:bg-white/5 hover:text-white/60"
-                        : "border-black/8 hover:bg-black/5 hover:text-black/60",
+                        : "border-black/8 hover:bg-black/5 hover:text-black/60";
+                    })(),
                   )}
                 >
                   <ThumbsDown className="h-3.5 w-3.5" />

@@ -139,16 +139,20 @@ export function SettingsModal({ open, onOpenChange, user, onUsernameChange }) {
                     : "bg-[#000000] text-white hover:bg-[#2541B2]"
                 }`}
               >
-                {saving ? (
-                  <span className="flex items-center gap-1.5">
-                    <span className="animate-spin">⟳</span>
-                    Saving...
-                  </span>
-                ) : saved ? (
-                  <Check className="h-4 w-4" />
-                ) : (
-                  "Save"
-                )}
+                {(() => {
+                  if (saving) {
+                    return (
+                      <span className="flex items-center gap-1.5">
+                        <span className="animate-spin">⟳</span>
+                        Saving...
+                      </span>
+                    );
+                  }
+                  if (saved) {
+                    return <Check className="h-4 w-4" />;
+                  }
+                  return "Save";
+                })()}
               </Button>
             </div>
             {error && (

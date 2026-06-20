@@ -1,4 +1,5 @@
 import logging
+import os
 import re
 
 import requests
@@ -100,12 +101,11 @@ class RepositoryAnalyzeView(APIView):
 
                 repo.status = "processing"
                 repo.error_message = ""
+                repo.task_id = ""
                 repo.save()
 
             async_result = analyze_repository_task.delay(repo.pk)
-
-            repo.task_id = async_result.id
-            repo.save(update_fields=["task_id"])
+            Repository.objects.filter(id=repo.pk).update(task_id=async_result.id)
 
             logger.info(
                 f"RepositoryAnalyzeView: Started analysis for repo {repo.pk}, task {async_result.id}"
@@ -379,8 +379,9 @@ class SupabaseLoginView(APIView):
                             user=user,
                             supabase_uid=supabase_uid,
                         )
-        except Exception as e:
-            return Response({"error": f"Failed to create user: {str(e)}"}, status=500)
+        except Exception:
+            logger.exception("SupabaseLoginView: Failed to create user")
+            return Response({"error": "Failed to create user"}, status=500)
 
         refresh = RefreshToken.for_user(user)
         access = str(refresh.access_token)
@@ -411,6 +412,7 @@ class StructuredSkillsView(APIView):
         session = get_object_or_404(
             ConversationSession, id=session_id, user=request.user
         )
+
         skills_data = request.data.get("skills")
         if not isinstance(skills_data, list):
             return Response(
@@ -447,8 +449,6 @@ class RecommendationView(APIView):
 
     def get(self, request, session_id):
         """Get recommended issues based on user's selected skills."""
-        import os
-
         from .services.learning_path import generate_learning_path
         from .services.recommender import RecommendationEngine
 
@@ -457,7 +457,6 @@ class RecommendationView(APIView):
         )
         repo = session.repository
 
-        # Get user skills from session state
         user_skills = session.state.get("user_skills", [])
         if (
             isinstance(user_skills, list)
@@ -468,7 +467,6 @@ class RecommendationView(APIView):
         else:
             user_skill_names = user_skills if isinstance(user_skills, list) else []
 
-        # Fetch claimed issue numbers to exclude
         claimed = IssueClaim.objects.filter(repository=repo).values_list(
             "issue_number", flat=True
         )
@@ -488,18 +486,21 @@ class RecommendationView(APIView):
             engine.load_index(index_path)
 
             if not user_skill_names:
-                user_skill_names = repo.skills_found[:3] if repo.skills_found else []
+                sk = repo.skills_found or []
+                sk_sorted = sorted(sk, key=lambda s: (-len(s), s))
+                user_skill_names = sk_sorted[:3]
+                user_skills = user_skill_names
 
             recommendations = (
-                engine.recommend(
-                    user_skill_names, top_k=5, exclude_issue_ids=exclude_ids
-                )
+                engine.recommend(user_skills, top_k=5, exclude_issue_ids=exclude_ids)
                 if user_skill_names
                 else []
             )
 
             if not recommendations:
-                # No matching issues - generate learning path
+                has_history = IssueClaim.objects.filter(
+                    repository=repo, user=request.user
+                ).exists()
                 learning_path = generate_learning_path(engine.graph, user_skill_names)
                 return Response(
                     {
@@ -507,10 +508,11 @@ class RecommendationView(APIView):
                         "recommendations": [],
                         "learning_path": learning_path,
                         "message": learning_path,
+                        "has_contribution_history": has_history,
+                        "all_skills_in_repo": repo.skills_found or [],
                     }
                 )
 
-            # Format recommendations for frontend
             formatted_recs = []
             for rec in recommendations:
                 formatted_recs.append(
@@ -548,7 +550,6 @@ class SelectIssueView(APIView):
     permission_classes = [IsAuthenticated]
 
     def put(self, request, session_id):
-        """Store selected issue in session state and auto-claim it."""
         session = get_object_or_404(
             ConversationSession, id=session_id, user=request.user
         )
@@ -623,3 +624,48 @@ class ReleaseIssueView(APIView):
             user=request.user,
         ).delete()
         return Response({"status": "released", "issue_number": issue_number})
+
+
+class NoSkillsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, session_id):
+        session = get_object_or_404(
+            ConversationSession, id=session_id, user=request.user
+        )
+        repo: Repository = session.repository
+
+        skills = repo.skills_found or []
+
+        if not skills:
+            return Response(
+                {
+                    "status": "no_skills",
+                    "roadmap": "No skills were identified for this repository.",
+                }
+            )
+
+        lines = [
+            f"To contribute to **{repo.url}**, you'll need familiarity with these skills:",
+            "",
+        ]
+        for i, skill in enumerate(skills[:8], 1):
+            lines.append(f"{i}. **{skill}**")
+        if len(skills) > 8:
+            lines.append(f"\n... and {len(skills) - 8} more.")
+        lines.extend(
+            [
+                "",
+                "Start with the skills that interest you most. "
+                "Pick one and practice with beginner-friendly issues, "
+                "then come back when you feel ready!",
+            ]
+        )
+
+        return Response(
+            {
+                "status": "no_skills",
+                "roadmap": "\n".join(lines),
+                "skills_found": skills[:8],
+            }
+        )

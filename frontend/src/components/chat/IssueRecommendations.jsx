@@ -54,13 +54,14 @@ export function IssueRecommendations({
               key={issue.id}
               className={cn(
                 "rounded-xl border p-4 space-y-3 transition-all cursor-pointer",
-                isSelected
-                  ? isDark
-                    ? "border-[#2541B2] ring-1 ring-[#2541B2]/20 bg-[#2541B2]/5"
-                    : "border-[#2541B2] ring-1 ring-[#2541B2]/20 bg-[#2541B2]/5"
-                  : isDark
+                (() => {
+                  if (isSelected) {
+                    return "border-[#2541B2] ring-1 ring-[#2541B2]/20 bg-[#2541B2]/5";
+                  }
+                  return isDark
                     ? "border-white/6 bg-white/2 hover:border-white/12"
-                    : "border-black/6 bg-white hover:border-black/12",
+                    : "border-black/6 bg-white hover:border-black/12";
+                })(),
               )}
             >
               <div className="flex justify-between items-start gap-2">

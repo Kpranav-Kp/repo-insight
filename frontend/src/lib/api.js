@@ -68,6 +68,17 @@ export const api = {
       method: "PUT",
       body: JSON.stringify({ issue }),
     }),
+
+  submitNoSkills: (sessionId) =>
+    request(`/chat/session/${sessionId}/no-skills/`, {
+      method: "GET",
+    }),
+
+  submitExtraSkills: (sessionId, skills) =>
+    request(`/chat/session/${sessionId}/skills/structured/`, {
+      method: "PUT",
+      body: JSON.stringify({ skills }),
+    }),
 };
 
 export async function poll(

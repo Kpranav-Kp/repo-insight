@@ -137,7 +137,6 @@ class GitHubClient:
         while len(prs) < limit:
             params = {"state": state, "per_page": per_page, "page": page}
             response = self.session.get(url, params=params, timeout=30)
-
             self._check_rate_limit(response)
 
             if response.status_code != 200:
@@ -214,7 +213,8 @@ class GitHubClient:
         data = response.json()
         if data.get("type") != "file" or data.get("encoding") != "base64":
             return None
-        return base64.b64decode(data["content"]).decode("utf-8", errors="replace")
+        content = base64.b64decode(data["content"]).decode("utf-8", errors="replace")
+        return content
 
     def extract_dependency_skills(self, repo_url: str) -> list[str]:
         """Parse common dependency files and return list of package names."""
@@ -241,16 +241,34 @@ class GitHubClient:
                 import json
 
                 data = json.loads(content)
-                return list(data.get("dependencies", {}).keys()) + list(
-                    data.get("devDependencies", {}).keys()
-                )
+                raw = list(data.get("dependencies", {}).keys())
+                cleaned = set()
+                for dep in raw:
+                    if dep.startswith("@"):
+                        parts = dep.split("/")
+                        if len(parts) == 2:
+                            name = parts[1]
+                            if name not in (
+                                "cli",
+                                "core",
+                                "plugin",
+                                "preset",
+                                "utils",
+                                "helper",
+                                "helpers",
+                                "loader",
+                            ):
+                                cleaned.add(name)
+                    else:
+                        cleaned.add(dep)
+                return sorted(cleaned)
             except (json.JSONDecodeError, AttributeError):
                 return []
         if filename == "requirements.txt":
             pkgs = []
             for line in content.splitlines():
                 line = line.strip()
-                if not line or line.startswith(("#", "-", "git+")):
+                if not line or line.startswith(("#", "-", "git+", "--")):
                     continue
                 pkg = re.split(r"[=<>~!]", line)[0].strip().lower()
                 if pkg:
@@ -271,6 +289,12 @@ class GitHubClient:
             return pkgs
         if filename == "go.mod":
             pkgs = []
+            for line in content.splitlines():
+                stripped = line.strip()
+                single = re.match(r"^require\s+(\S+)", stripped)
+                if single:
+                    pkg = single.group(1).split("/")[-1]
+                    pkgs.append(pkg)
             in_require = False
             for line in content.splitlines():
                 stripped = line.strip()
@@ -283,12 +307,19 @@ class GitHubClient:
                     pkg = stripped.split()[0].split("/")[-1]
                     pkgs.append(pkg)
             return pkgs
-        if filename in ("Pipfile", "Gemfile"):
+        if filename == "Pipfile":
             pkgs = []
             for line in content.splitlines():
                 stripped = line.strip()
                 if "=" in stripped and not stripped.startswith(("#", "[")):
                     pkgs.append(stripped.split("=")[0].strip().strip('"').strip("'"))
+            return pkgs
+        if filename == "Gemfile":
+            pkgs = []
+            for line in content.splitlines():
+                match = re.match(r"^\s*gem\s+['\"]([\w\-]+)['\"]", line)
+                if match:
+                    pkgs.append(match.group(1))
             return pkgs
         return []
 

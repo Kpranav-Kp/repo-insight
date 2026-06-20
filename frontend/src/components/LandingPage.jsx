@@ -305,15 +305,13 @@ export default function LandingPage() {
             }
           >
             <p
-              className="text-[12px] md:text-sm tracking-wider text-white/90 leading-relaxed uppercase text-center md:text-right"
+              className="text-sm md:text-base tracking-wider text-white/90 leading-relaxed uppercase text-center md:text-right"
               style={{
-                fontFamily: "Mileast, serif",
+                fontFamily:
+                  "'Cormorant Garamond', 'Playfair Display', Georgia, serif",
+                fontStyle: "italic",
                 opacity:
-                  introPhase === "reveal"
-                    ? 0
-                    : introPhase === "initial"
-                      ? 0
-                      : 1,
+                  introPhase === "reveal" || introPhase === "initial" ? 0 : 1,
                 transition: "opacity 1.5s ease-in-out",
               }}
             >
@@ -334,8 +332,11 @@ export default function LandingPage() {
             }}
           >
             <h1
-              className="text-7xl sm:text-8xl md:text-9xl font-black tracking-tight text-white leading-none"
-              style={{ fontFamily: "Orange Vintage, serif" }}
+              className="text-8xl sm:text-9xl md:text-[8rem] font-black tracking-tight text-white leading-none"
+              style={{
+                fontFamily:
+                  "'OrangeVoyage', 'Abril Fatface', 'Playfair Display', Georgia, serif",
+              }}
             >
               RepoInsight
             </h1>
@@ -350,15 +351,17 @@ export default function LandingPage() {
             }
           >
             <p
-              className="text-[12px] md:text-sm tracking-wider text-white/90 leading-relaxed uppercase text-center md:text-left"
+              className="text-sm md:text-base tracking-wider text-white/90 leading-relaxed uppercase text-center md:text-left"
               style={{
-                fontFamily: "Mileast, serif",
+                fontFamily:
+                  "'Cormorant Garamond', 'Playfair Display', Georgia, serif",
+                fontStyle: "italic",
                 opacity:
-                  introPhase === "reveal"
+                  introPhase === "reveal" ||
+                  introPhase === "initial" ||
+                  introPhase === "left"
                     ? 0
-                    : introPhase === "initial" || introPhase === "left"
-                      ? 0
-                      : 1,
+                    : 1,
                 transition: "opacity 1.5s ease-in-out",
               }}
             >
@@ -371,10 +374,10 @@ export default function LandingPage() {
 
       {/* ── Navigation (always visible, behind intro initially) ── */}
       <nav className="fixed top-4 left-4 right-4 md:left-8 md:right-8 z-40 flex items-center justify-between px-6 md:px-10 py-4 bg-black/50 border border-white/10 backdrop-blur-xl rounded-2xl">
-        <div className="flex items-center gap-2.5 font-mono text-sm font-black tracking-widest uppercase">
+        <div className="flex items-center gap-2.5 text-sm font-black tracking-widest">
           <span
             ref={navTextRef}
-            className="text-white"
+            className="font-orangevoyage text-white"
             style={{ opacity: introPhase === "done" ? 1 : 0 }}
           >
             RepoInsight
