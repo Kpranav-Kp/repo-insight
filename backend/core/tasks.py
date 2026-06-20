@@ -33,6 +33,9 @@ def analyze_repository_task(repo_id: int):
         repo.issues_indexed = result["issues_indexed"]
         repo.prs_indexed = result["prs_indexed"]
         repo.skills_found = result["skills_found"]
+        from django.utils import timezone
+
+        repo.analyzed_at = timezone.now()
         repo.save()
         try:
             guidelines = fetch_contributing_guidelines.invoke(repo.url)

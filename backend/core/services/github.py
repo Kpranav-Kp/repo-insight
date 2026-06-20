@@ -27,6 +27,7 @@ class IssueData:
     body: str
     state: str
     labels: list[str]
+    created_at: str
     skills: list[str] = field(default_factory=list)
 
 
@@ -109,6 +110,7 @@ class GitHubClient:
                         body=item.get("body", "") or "",
                         state=item["state"],
                         labels=[label["name"] for label in item.get("labels", [])],
+                        created_at=item.get("created_at", ""),
                     )
                 )
 
@@ -177,6 +179,16 @@ class GitHubClient:
             page += 1
 
         return prs
+
+    def fetch_languages(self, repo_url: str) -> dict[str, int]:
+        """Fetch repo languages from GitHub API. Returns {language: bytes}."""
+        owner, repo = self._parse_repo_url(repo_url)
+        url = f"https://api.github.com/repos/{owner}/{repo}/languages"
+        response = self.session.get(url, timeout=30)
+        self._check_rate_limit(response)
+        if response.status_code != 200:
+            return {}
+        return response.json()
 
     def _extract_linked_issues(self, text: str) -> list[int]:
         if not text:

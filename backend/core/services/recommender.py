@@ -1,6 +1,7 @@
-# backend/core/services/recommender.py
 import json
+import math
 import os
+from datetime import datetime
 
 from django.conf import settings
 
@@ -16,15 +17,9 @@ class RecommendationEngine:
         model_path = getattr(settings, "SENTENCE_TRANSFORMER_MODEL", "all-MiniLM-L6-v2")
         self.graph = SemanticGraph(model_name=model_path)
         self._is_built = False
+        self._repo_language: str | None = None
 
     def build_from_repository(self, repo_url: str) -> dict:
-        """
-        Fetch issues + PRs from repo, populate the semantic graph,
-        and build all edges.
-
-        Returns a summary dict for the caller (e.g. Celery task).
-        Raises RuntimeError on GitHub failures.
-        """
         try:
             issues = self.github.fetch_issues(
                 repo_url, limit=settings.GITHUB_ISSUE_LIMIT
@@ -43,12 +38,24 @@ class RecommendationEngine:
         except GitHubError as e:
             raise RuntimeError(f"Failed to fetch PRs: {e}") from e
 
+        try:
+            languages = self.github.fetch_languages(repo_url)
+        except (RateLimitError, GitHubError):
+            languages = {}
+
+        top_lang = (
+            max(languages, key=lambda k: languages[k] or 0) if languages else None
+        )
+        self._repo_language = top_lang
+
         all_skills = set()
 
         for issue in issues:
             metadata = extract_issue_metadata(issue.title, issue.body, issue.labels)
             skills = metadata["skills"]
             difficulty = metadata["difficulty"]
+            if top_lang and top_lang.lower() not in {s.lower() for s in skills}:
+                skills.append(top_lang.lower())
             all_skills.update(skills)
             self.graph.add_issue(
                 {
@@ -58,7 +65,8 @@ class RecommendationEngine:
                     "skills": skills,
                     "labels": issue.labels,
                     "state": issue.state,
-                    "difficulty": difficulty,  # new field
+                    "difficulty": difficulty,
+                    "created_at": issue.created_at,
                 }
             )
         for pr in prs:
@@ -93,26 +101,62 @@ class RecommendationEngine:
             "graph_stats": self.graph.stats(),
         }
 
-    def recommend(self, user_skills: list[str], top_k: int = 5) -> list[dict]:
-        """
-        Metadata-driven recommendation.
-        1. Use FAISS to retrieve top (top_k * 2) candidate issues.
-        2. Re-rank each candidate using:
-           final_score = 0.6 * skill_overlap + 0.2 * difficulty_score + 0.2 * label_bonus
-        3. Return top_k issues sorted by final_score.
-        """
+    def recommend(
+        self,
+        user_skills: list[str],
+        top_k: int = 5,
+        exclude_issue_ids: set[str] | None = None,
+    ) -> list[dict]:
         if not self._is_built:
             raise RuntimeError("Graph not built. Call build_from_repository() first.")
 
-        candidates = self.graph.skill_to_issue(user_skills, top_k=top_k * 2)
+        exclude_issue_ids = exclude_issue_ids or set()
 
+        # Step 1: FAISS skill-to-issue retrieval (generous top_k)
+        candidates = self.graph.skill_to_issue(user_skills, top_k=top_k * 3)
         if not candidates:
             return []
 
+        # Step 2: Filter — open only & not resolved by merged PR & not claimed
+        filtered = []
+        resolved_ids = self._resolved_issue_ids()
+        for cand in candidates:
+            issue_id = cand["id"]
+            if cand.get("state") != "open":
+                continue
+            if issue_id in resolved_ids:
+                continue
+            if issue_id in exclude_issue_ids:
+                continue
+            filtered.append(cand)
+
+        if not filtered:
+            return []
+
+        # Step 3: Multi-hop expansion via ISSUE_ISSUE_SIM edges
+        candidate_ids = {c["id"] for c in filtered}
+        expanded_ids = set(candidate_ids)
+        for cid in list(candidate_ids):
+            connected = self.graph.get_connected_issues(cid)
+            for conn in connected:
+                if (
+                    conn not in expanded_ids
+                    and conn not in resolved_ids
+                    and conn not in exclude_issue_ids
+                ):
+                    expanded_ids.add(conn)
+
+        # Fetch metadata for expanded issues not already in filtered
+        seen_ids = {c["id"] for c in filtered}
+        if expanded_ids - seen_ids:
+            extra = self.graph.get_issues_by_ids(expanded_ids - seen_ids)
+            filtered.extend(extra)
+
         user_skills_set = set(s.lower() for s in user_skills)
+        now = datetime.now()
 
         scored = []
-        for cand in candidates:
+        for cand in filtered:
             issue_id = cand["id"]
             issue_skills = set(s.lower() for s in cand.get("skills", []))
             semantic_score = float(cand.get("score", 0))
@@ -133,16 +177,27 @@ class RecommendationEngine:
             label_bonus = self.graph.get_issue_label_bonus(issue_id)
             normalized_label = label_bonus / 0.3 if label_bonus else 0.0
 
-            # Blend metadata overlap with semantic retrieval when skills are sparse
+            # Recency: exp decay, 0 = very old, 1 = fresh
+            created_str = cand.get("created_at", "")
+            recency_score = 1.0
+            if created_str:
+                try:
+                    dt = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
+                    months = (now - dt).days / 30.44
+                    recency_score = max(0.0, math.exp(-0.08 * months))
+                except (ValueError, TypeError):
+                    pass
+
             skill_component = skill_overlap if issue_skills else semantic_score
             coverage_component = user_coverage if issue_skills else semantic_score * 0.5
 
             final_score = (
-                0.30 * skill_component
-                + 0.30 * semantic_score
-                + 0.20 * coverage_component
+                0.25 * skill_component
+                + 0.25 * semantic_score
+                + 0.15 * coverage_component
                 + 0.10 * difficulty_score
                 + 0.10 * normalized_label
+                + 0.15 * recency_score
             )
 
             cand["skill_overlap"] = sorted(overlap_skills)
@@ -152,13 +207,56 @@ class RecommendationEngine:
             cand["semantic_score"] = round(semantic_score, 4)
             cand["difficulty_score"] = difficulty_score
             cand["label_bonus"] = label_bonus
+            cand["recency_score"] = round(recency_score, 4)
             cand["combined_score"] = round(final_score, 4)
 
             scored.append(cand)
 
-        # Sort by combined_score descending
         scored.sort(key=lambda x: x["combined_score"], reverse=True)
-        return scored[:top_k]
+
+        # Step 4: Diversity re-ranking — demote clustered issues
+        diverse = self._diversify(scored, top_k)
+        return diverse[:top_k]
+
+    def _resolved_issue_ids(self) -> set[str]:
+        """Return set of issue IDs that have been resolved by a merged PR."""
+        resolved = set()
+        for edge in self.graph.adj.get_edges(self.graph.ISSUE_PR_HIST):
+            resolved.add(edge["source_id"])
+        return resolved
+
+    def _diversify(self, scored: list[dict], top_k: int) -> list[dict]:
+        if len(scored) <= top_k:
+            return scored
+
+        selected = [scored[0]]
+        remaining = scored[1:]
+
+        for _ in range(top_k - 1):
+            if not remaining:
+                break
+            best = None
+            best_min_sim = -1.0
+            for i, cand in enumerate(remaining):
+                cid = cand["id"]
+                max_sim = 0.0
+                for sel in selected:
+                    if self.graph.are_issues_connected(cid, sel["id"]):
+                        edge = self.graph.get_edge_weight(
+                            cid, sel["id"], self.graph.ISSUE_ISSUE_SIM
+                        )
+                        if edge is not None:
+                            max_sim = max(max_sim, edge)
+                min_sim = 1.0 - max_sim
+                if min_sim > best_min_sim:
+                    best_min_sim = min_sim
+                    best = i
+            if best is not None:
+                selected.append(remaining.pop(best))
+            else:
+                selected.append(remaining.pop(0))
+
+        return selected
 
     def check_duplicate(self, issue_text: str) -> tuple:
         """

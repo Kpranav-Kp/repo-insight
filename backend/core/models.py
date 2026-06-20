@@ -1,4 +1,3 @@
-# backend/core/models.py
 from django.contrib.auth.models import User
 from django.db import models
 
@@ -19,6 +18,7 @@ class Repository(models.Model):
     error_message = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    analyzed_at = models.DateTimeField(null=True, blank=True)
     index_path = models.CharField(max_length=500, blank=True)
     contributing_guidelines = models.TextField(blank=True, default="")
 
@@ -82,6 +82,19 @@ class ConversationSession(models.Model):
 
     def __str__(self):
         return f"Session for {self.user.username} on {self.repository.url} - Phase: {self.phase}"
+
+
+class IssueClaim(models.Model):
+    issue_number = models.IntegerField()
+    repository = models.ForeignKey(Repository, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    claimed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ["issue_number", "repository"]
+
+    def __str__(self):
+        return f"Issue #{self.issue_number} claimed by {self.user.username}"
 
 
 class LearnerProfile(models.Model):

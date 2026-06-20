@@ -245,13 +245,44 @@ class SemanticGraph:
                 )
 
     def skill_to_issue(self, user_skills: list[str], top_k: int = 5) -> list[dict]:
-        """
-        Given user skills, return top-K matching issues.
-        Uses FAISS search on the issue NodeStore.
-        """
         query_text = " ".join(user_skills)
         results = self.issues.search(query_text, top_k=top_k)
-        return [r for r in results if r["score"] > 0]
+        return [r for r in results if r["score"] > 0.15]
+
+    def get_connected_issues(self, issue_id: str) -> list[str]:
+        """Return issue IDs connected via ISSUE_ISSUE_SIM edges."""
+        connected = []
+        for edge in self.adj.get_edges(self.ISSUE_ISSUE_SIM):
+            if edge["source_id"] == str(issue_id):
+                connected.append(edge["target_id"])
+            elif edge["target_id"] == str(issue_id):
+                connected.append(edge["source_id"])
+        return connected
+
+    def get_issues_by_ids(self, issue_ids: set[str]) -> list[dict]:
+        """Return issue metadata dicts for given IDs."""
+        results = []
+        for m in self.issues.meta:
+            if m.get("id") in issue_ids:
+                entry = {k: v for k, v in m.items() if k != "_text"}
+                results.append(entry)
+        return results
+
+    def are_issues_connected(self, id_a: str, id_b: str) -> bool:
+        for edge in self.adj.get_edges(self.ISSUE_ISSUE_SIM):
+            if (edge["source_id"] == id_a and edge["target_id"] == id_b) or (
+                edge["source_id"] == id_b and edge["target_id"] == id_a
+            ):
+                return True
+        return False
+
+    def get_edge_weight(self, id_a: str, id_b: str, relation: str) -> float | None:
+        for edge in self.adj.get_edges(relation):
+            source_matches = edge["source_id"] == id_a and edge["target_id"] == id_b
+            target_matches = edge["source_id"] == id_b and edge["target_id"] == id_a
+            if source_matches or target_matches:
+                return edge["weight"]
+        return None
 
     def is_duplicate_issue(self, new_issue_text: str) -> tuple[bool, dict | None]:
         """

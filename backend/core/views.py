@@ -15,6 +15,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from .models import (
     ConversationSession,
+    IssueClaim,
     LearnerProfile,
     Recommendation,
     Repository,
@@ -39,10 +40,17 @@ def is_valid_github_url(url: str) -> bool:
     return bool(re.match(pattern, url.rstrip("/")))
 
 
+REPO_CACHE_TTL_HOURS = getattr(settings, "REPO_CACHE_TTL_HOURS", 6)
+
+
 class RepositoryAnalyzeView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
         url = request.data.get("url")
         if not url:
             logger.warning("RepositoryAnalyzeView: URL is required")
@@ -64,9 +72,16 @@ class RepositoryAnalyzeView(APIView):
                     url=url
                 )
 
-                if repo.status == "completed" and repo.index_path:
+                cache_valid = (
+                    repo.status == "completed"
+                    and repo.index_path
+                    and repo.analyzed_at is not None
+                    and timezone.now() - repo.analyzed_at
+                    < timedelta(hours=REPO_CACHE_TTL_HOURS)
+                )
+                if cache_valid:
                     logger.info(
-                        f"RepositoryAnalyzeView: Repository already completed: {repo.pk}"
+                        f"RepositoryAnalyzeView: Repository cache still valid: {repo.pk}"
                     )
                     return Response(RepositorySerializer(repo).data)
 
@@ -580,13 +595,17 @@ class RecommendationView(APIView):
             and user_skills
             and isinstance(user_skills[0], dict)
         ):
-            # Extract just the skill names from structured skills
             user_skill_names = [s["skill"] for s in user_skills]
         else:
             user_skill_names = user_skills if isinstance(user_skills, list) else []
 
+        # Fetch claimed issue numbers to exclude
+        claimed = IssueClaim.objects.filter(repository=repo).values_list(
+            "issue_number", flat=True
+        )
+        exclude_ids = {str(num) for num in claimed}
+
         try:
-            # Load the recommendation engine with repo index
             index_path = repo.index_path
             if not index_path or not os.path.exists(index_path):
                 return Response(
@@ -599,13 +618,15 @@ class RecommendationView(APIView):
             engine = RecommendationEngine()
             engine.load_index(index_path)
 
-            # If no user skills selected, use default skills from repo
             if not user_skill_names:
                 user_skill_names = repo.skills_found[:3] if repo.skills_found else []
 
-            # Get recommendations
             recommendations = (
-                engine.recommend(user_skill_names, top_k=5) if user_skill_names else []
+                engine.recommend(
+                    user_skill_names, top_k=5, exclude_issue_ids=exclude_ids
+                )
+                if user_skill_names
+                else []
             )
 
             if not recommendations:
@@ -659,7 +680,7 @@ class SelectIssueView(APIView):
     permission_classes = [IsAuthenticated]
 
     def put(self, request, session_id):
-        """Store selected issue in session state."""
+        """Store selected issue in session state and auto-claim it."""
         session = get_object_or_404(
             ConversationSession, id=session_id, user=request.user
         )
@@ -669,6 +690,14 @@ class SelectIssueView(APIView):
             return Response(
                 {"error": "issue data is required"},
                 status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        issue_number = issue_data.get("id")
+        if issue_number:
+            IssueClaim.objects.get_or_create(
+                issue_number=int(issue_number),
+                repository=session.repository,
+                defaults={"user": request.user},
             )
 
         current_state = session.state or {}
@@ -686,3 +715,43 @@ class SelectIssueView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class ClaimIssueView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, repo_id):
+        issue_number = request.data.get("issue_number")
+        if not issue_number:
+            return Response(
+                {"error": "issue_number is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        repo = get_object_or_404(Repository, id=repo_id)
+        _, created = IssueClaim.objects.get_or_create(
+            issue_number=int(issue_number),
+            repository=repo,
+            defaults={"user": request.user},
+        )
+
+        if not created:
+            return Response(
+                {"error": "Issue already claimed by another user"},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        return Response({"status": "claimed", "issue_number": issue_number})
+
+
+class ReleaseIssueView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, repo_id, issue_number):
+        repo = get_object_or_404(Repository, id=repo_id)
+        IssueClaim.objects.filter(
+            issue_number=issue_number,
+            repository=repo,
+            user=request.user,
+        ).delete()
+        return Response({"status": "released", "issue_number": issue_number})
