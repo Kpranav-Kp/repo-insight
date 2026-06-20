@@ -1,112 +1,103 @@
-# backend/core/services/learning_path.py
 from collections import defaultdict, deque
 
 
-class SkillDependencyGraph:
-    def __init__(self):
-        self.skills: set[str] = set()
-        self.edges: dict[str, set[str]] = defaultdict(set)  # skill -> depends_on
-        self.issue_skills: list[set[str]] = []  # skills per issue
+def _build_adjacency(graph):
+    """Build bidirectional skill↔issue and issue↔issue maps from graph edges."""
+    skill_to_issues: dict[str, set[str]] = defaultdict(set)
+    issue_to_skills: dict[str, set[str]] = defaultdict(set)
+    issue_to_issues: dict[str, set[str]] = defaultdict(set)
 
-    def add_issue(self, issue_skills: list[str]) -> None:
-        """Add an issue's skills to the graph."""
-        skills_set = set(s.lower() for s in issue_skills if s)
-        if skills_set:
-            self.issue_skills.append(skills_set)
-            self.skills.update(skills_set)
+    for edge in graph.adj.get_edges():
+        if edge["relation"] == graph.SKILL_ISSUE_SIM:
+            skill_id = edge["source_id"]
+            issue_id = edge["target_id"]
+            skill_to_issues[skill_id].add(issue_id)
+            issue_to_skills[issue_id].add(skill_id)
+        elif edge["relation"] == graph.ISSUE_ISSUE_SIM:
+            issue_to_issues[edge["source_id"]].add(edge["target_id"])
+            issue_to_issues[edge["target_id"]].add(edge["source_id"])
 
-    def build_dependencies(self) -> None:
-        """
-        Build edges based on co-occurrence in issues.
-        If skill A and B frequently appear together, assume B depends on A.
-        We'll infer simpler skills are prerequisites for more complex ones.
-        """
-        if not self.issue_skills:
-            return
+    # Also include skills from issue metadata that may not have embedding edges
+    for issue_meta in graph.issues.meta:
+        issue_id = issue_meta.get("id", "")
+        for skill in issue_meta.get("skills", []):
+            skill_lower = skill.lower()
+            skill_to_issues[skill_lower].add(issue_id)
+            issue_to_skills[issue_id].add(skill_lower)
 
-        # Count co-occurrences
-        co_occurrence = defaultdict(lambda: defaultdict(int))
-        for skills in self.issue_skills:
-            skills_list = sorted(list(skills))
-            for i, s1 in enumerate(skills_list):
-                for s2 in skills_list[i + 1 :]:
-                    co_occurrence[s1][s2] += 1
-                    co_occurrence[s2][s1] += 1
-
-        # Build edges: simpler skill -> more complex skill
-        # Heuristic: if skill A appears in fewer issues, it's likely prerequisite for B
-        skill_frequency = defaultdict(int)
-        for skills in self.issue_skills:
-            for skill in skills:
-                skill_frequency[skill] += 1
-
-        for skills in self.issue_skills:
-            if len(skills) > 1:
-                sorted_skills = sorted(list(skills), key=lambda x: skill_frequency[x])
-                # Add edges from less frequent (prerequisite) to more frequent
-                for i in range(len(sorted_skills) - 1):
-                    self.edges[sorted_skills[i]].add(sorted_skills[i + 1])
-
-    def topological_sort(self) -> list[str]:
-        """
-        Kahn's algorithm for topological sort.
-        Returns ordered list of skills (prerequisites first).
-        """
-        in_degree = {skill: 0 for skill in self.skills}
-        for skill in self.edges:
-            for neighbor in self.edges[skill]:
-                in_degree[neighbor] += 1
-
-        queue = deque([skill for skill in self.skills if in_degree[skill] == 0])
-        result = []
-
-        while queue:
-            skill = queue.popleft()
-            result.append(skill)
-
-            for neighbor in self.edges[skill]:
-                in_degree[neighbor] -= 1
-                if in_degree[neighbor] == 0:
-                    queue.append(neighbor)
-
-        # If cycle exists, include remaining skills
-        if len(result) < len(self.skills):
-            result.extend([s for s in self.skills if s not in result])
-
-        return result
-
-    def get_learning_path(self, user_skills: set[str]) -> list[str]:
-        """
-        Return ordered list of skills the user should learn next.
-        Filters out already known skills.
-        """
-        user_skills_lower = set(s.lower() for s in user_skills)
-        self.build_dependencies()
-        sorted_skills = self.topological_sort()
-        return [s for s in sorted_skills if s not in user_skills_lower]
+    return skill_to_issues, issue_to_skills, issue_to_issues
 
 
-def generate_learning_path(repo_issues: list[dict]) -> str:
-    graph = SkillDependencyGraph()
+def generate_learning_path(graph, user_skills: list[str]) -> str:
+    skill_to_issues, issue_to_skills, issue_to_issues = _build_adjacency(graph)
 
-    for issue in repo_issues:
-        skills = issue.get("skills", [])
-        graph.add_issue(skills)
+    all_skills_in_graph = set(skill_to_issues.keys())
+    user_skills_lower = set(s.lower() for s in user_skills)
+    unknown = all_skills_in_graph - user_skills_lower
 
-    ordered_skills = graph.topological_sort()
+    if not unknown:
+        return "You already know all the skills aligned with this repository's open issues."
 
-    if not ordered_skills:
+    # BFS from user skills: skill → issue → issue → skill
+    visited_skills = set(user_skills_lower)
+    visited_issues: set[str] = set()
+    queue: deque = deque()
+    for s in user_skills_lower:
+        if s in skill_to_issues:
+            queue.append((s, 0, "skill"))
+
+    distance: dict[str, int] = {}
+
+    while queue:
+        node, dist, node_type = queue.popleft()
+        if node_type == "skill":
+            for issue_id in skill_to_issues.get(node, set()):
+                if issue_id not in visited_issues:
+                    visited_issues.add(issue_id)
+                    queue.append((issue_id, dist + 1, "issue"))
+        elif node_type == "issue":
+            for skill_name in issue_to_skills.get(node, set()):
+                skill_lower = skill_name.lower()
+                if skill_lower not in visited_skills:
+                    visited_skills.add(skill_lower)
+                    if skill_lower not in distance:
+                        distance[skill_lower] = dist + 1
+                    queue.append((skill_lower, dist + 1, "skill"))
+            for rel_id in issue_to_issues.get(node, set()):
+                if rel_id not in visited_issues:
+                    visited_issues.add(rel_id)
+                    queue.append((rel_id, dist + 1, "issue"))
+
+    reachable = [s for s in unknown if s.lower() in distance]
+    unreachable = [s for s in unknown if s.lower() not in distance]
+
+    reachable.sort(key=lambda s: (distance[s.lower()], s.lower()))
+    unreachable.sort()
+
+    ordered = reachable + unreachable
+
+    if not ordered:
         return (
             "No learning path available. The repository has no clearly defined skills."
         )
 
-    skill_list = "\n".join(
-        f"{i + 1}. **{skill}**" for i, skill in enumerate(ordered_skills[:10])
+    heading = (
+        "Based on your current skills, here is a suggested learning path "
+        "to help you contribute more effectively to this repository:\n\n"
     )
 
-    return (
-        f"Currently, there are no issues that match your skillset. "
-        f"However, if you plan to contribute to this repository, "
-        f"here's a suggested learning path:\n\n{skill_list}\n\n"
-        f"Learn these skills in order, and come back once you're familiar with them!"
+    skill_lines = []
+    for i, skill in enumerate(ordered[:15]):
+        skill_lines.append(f"{i + 1}. **{skill}**")
+
+    path_text = heading + "\n".join(skill_lines)
+
+    if len(ordered) > 15:
+        path_text += f"\n\n... and {len(ordered) - 15} more skills."
+
+    path_text += (
+        "\n\nStart with the skills closest to what you already know, "
+        "and gradually expand outward as you contribute."
     )
+
+    return path_text

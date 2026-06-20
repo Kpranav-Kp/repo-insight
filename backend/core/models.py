@@ -27,18 +27,9 @@ class Repository(models.Model):
 
 
 class UserProfile(models.Model):
-    BAND_CHOICES = [
-        ("beginner", "Beginner"),
-        ("intermediate", "Intermediate"),
-        ("advanced", "Advanced"),
-    ]
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     skills = models.JSONField(default=list)
-    target_repo = models.ForeignKey(
-        Repository, null=True, blank=True, on_delete=models.SET_NULL
-    )
     supabase_uid = models.CharField(max_length=128, unique=True, null=True, blank=True)
-    email_verified = models.BooleanField(default=False)
 
     def __str__(self):
         return f"{self.user.username}'s profile"
@@ -58,7 +49,6 @@ class Recommendation(models.Model):
     combined_score = models.FloatField()
     feedback = models.BooleanField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    pr_created_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-combined_score"]

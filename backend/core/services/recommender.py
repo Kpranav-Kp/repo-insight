@@ -13,9 +13,9 @@ from .skills import SkillExtractor, extract_issue_metadata
 class RecommendationEngine:
     def __init__(self, github_token: str | None = None):
         self.github = GitHubClient(token=github_token)
-        self.skill_extractor = SkillExtractor()
         model_path = getattr(settings, "SENTENCE_TRANSFORMER_MODEL", "all-MiniLM-L6-v2")
         self.graph = SemanticGraph(model_name=model_path)
+        self.skill_extractor = SkillExtractor(model=self.graph.issues._service.model)
         self._is_built = False
         self._repo_language: str | None = None
 
@@ -38,24 +38,47 @@ class RecommendationEngine:
         except GitHubError as e:
             raise RuntimeError(f"Failed to fetch PRs: {e}") from e
 
+        # --- Dynamic skill discovery ---
+
         try:
             languages = self.github.fetch_languages(repo_url)
         except (RateLimitError, GitHubError):
             languages = {}
 
+        repo_languages = sorted(languages.keys())
         top_lang = (
             max(languages, key=lambda k: languages[k] or 0) if languages else None
         )
         self._repo_language = top_lang
 
+        try:
+            topics = self.github.fetch_topics(repo_url)
+        except (RateLimitError, GitHubError):
+            topics = []
+
+        try:
+            dep_skills = self.github.extract_dependency_skills(repo_url)
+        except (RateLimitError, GitHubError):
+            dep_skills = []
+
+        # Build the dynamic vocabulary for embedding matching
+        repo_skills_lower = {s.lower() for s in repo_languages + topics + dep_skills}
+        self.skill_extractor.add_skills(sorted(repo_skills_lower))
+
+        # Ground-truth skills to inject on every issue
+        repo_ground_truth = {s.lower() for s in repo_languages + dep_skills}
+
         all_skills = set()
 
         for issue in issues:
-            metadata = extract_issue_metadata(issue.title, issue.body, issue.labels)
+            metadata = extract_issue_metadata(
+                issue.title, issue.body, issue.labels, extractor=self.skill_extractor
+            )
             skills = metadata["skills"]
             difficulty = metadata["difficulty"]
-            if top_lang and top_lang.lower() not in {s.lower() for s in skills}:
-                skills.append(top_lang.lower())
+            for gt_skill in repo_ground_truth:
+                if gt_skill not in {s.lower() for s in skills}:
+                    skills.append(gt_skill)
             all_skills.update(skills)
             self.graph.add_issue(
                 {
@@ -257,17 +280,6 @@ class RecommendationEngine:
                 selected.append(remaining.pop(0))
 
         return selected
-
-    def check_duplicate(self, issue_text: str) -> tuple:
-        """
-        Check whether a given text is a near-duplicate of an indexed issue.
-        Delegates to SemanticGraph which owns the DEDUP_THRESHOLD.
-
-        Returns (True, matched_issue_dict) or (False, None).
-        """
-        if not self._is_built:
-            raise RuntimeError("Graph not built. Call build_from_repository() first.")
-        return self.graph.is_duplicate_issue(issue_text)
 
     def save_index(self, directory: str):
         """

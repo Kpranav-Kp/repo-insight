@@ -190,6 +190,108 @@ class GitHubClient:
             return {}
         return response.json()
 
+    def fetch_topics(self, repo_url: str) -> list[str]:
+        """Fetch repo topics from GitHub API. Returns list of topic names."""
+        owner, repo = self._parse_repo_url(repo_url)
+        url = f"https://api.github.com/repos/{owner}/{repo}/topics"
+        headers = {"Accept": "application/vnd.github.mercy-preview+json"}
+        response = self.session.get(url, timeout=15, headers=headers)
+        self._check_rate_limit(response)
+        if response.status_code != 200:
+            return []
+        data = response.json()
+        return data.get("names", [])
+
+    def fetch_file(self, repo_url: str, file_path: str) -> str | None:
+        """Fetch a single file from the repo via GitHub Contents API."""
+        import base64
+
+        owner, repo = self._parse_repo_url(repo_url)
+        url = f"https://api.github.com/repos/{owner}/{repo}/contents/{file_path}"
+        response = self.session.get(url, timeout=15)
+        if response.status_code != 200:
+            return None
+        data = response.json()
+        if data.get("type") != "file" or data.get("encoding") != "base64":
+            return None
+        return base64.b64decode(data["content"]).decode("utf-8", errors="replace")
+
+    def extract_dependency_skills(self, repo_url: str) -> list[str]:
+        """Parse common dependency files and return list of package names."""
+        deps = set()
+        files_to_try = [
+            "package.json",
+            "requirements.txt",
+            "Cargo.toml",
+            "go.mod",
+            "Pipfile",
+            "Gemfile",
+        ]
+        for filepath in files_to_try:
+            content = self.fetch_file(repo_url, filepath)
+            if content is None:
+                continue
+            parsed = self._parse_dep_file(filepath, content)
+            deps.update(parsed)
+        return sorted(deps)
+
+    def _parse_dep_file(self, filename: str, content: str) -> list[str]:
+        if filename == "package.json":
+            try:
+                import json
+
+                data = json.loads(content)
+                return list(data.get("dependencies", {}).keys()) + list(
+                    data.get("devDependencies", {}).keys()
+                )
+            except (json.JSONDecodeError, AttributeError):
+                return []
+        if filename == "requirements.txt":
+            pkgs = []
+            for line in content.splitlines():
+                line = line.strip()
+                if not line or line.startswith(("#", "-", "git+")):
+                    continue
+                pkg = re.split(r"[=<>~!]", line)[0].strip().lower()
+                if pkg:
+                    pkgs.append(pkg)
+            return pkgs
+        if filename == "Cargo.toml":
+            in_deps = False
+            pkgs = []
+            for line in content.splitlines():
+                stripped = line.strip()
+                if stripped.startswith("[dependencies"):
+                    in_deps = True
+                    continue
+                if in_deps and stripped.startswith("["):
+                    break
+                if in_deps and "=" in stripped and not stripped.startswith("#"):
+                    pkgs.append(stripped.split("=")[0].strip())
+            return pkgs
+        if filename == "go.mod":
+            pkgs = []
+            in_require = False
+            for line in content.splitlines():
+                stripped = line.strip()
+                if stripped == "require (":
+                    in_require = True
+                    continue
+                if in_require and stripped == ")":
+                    break
+                if in_require and stripped:
+                    pkg = stripped.split()[0].split("/")[-1]
+                    pkgs.append(pkg)
+            return pkgs
+        if filename in ("Pipfile", "Gemfile"):
+            pkgs = []
+            for line in content.splitlines():
+                stripped = line.strip()
+                if "=" in stripped and not stripped.startswith(("#", "[")):
+                    pkgs.append(stripped.split("=")[0].strip().strip('"').strip("'"))
+            return pkgs
+        return []
+
     def _extract_linked_issues(self, text: str) -> list[int]:
         if not text:
             return []

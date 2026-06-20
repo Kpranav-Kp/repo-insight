@@ -7,7 +7,16 @@ from langchain.tools import tool
 
 from ..skills import SkillExtractor
 
-extractor = SkillExtractor()
+_MODEL = None
+
+
+def _get_model():
+    global _MODEL
+    if _MODEL is None:
+        from sentence_transformers import SentenceTransformer
+
+        _MODEL = SentenceTransformer("all-MiniLM-L6-v2")
+    return _MODEL
 
 
 @tool
@@ -30,6 +39,36 @@ def fetch_repo_skills(repo_url: str) -> list[str]:
 
     if response.status_code != 200:
         return []
+
+    # Bootstrap dynamic skills from repo metadata
+    repo_api_url = f"https://api.github.com/repos/{owner}/{repo}"
+    dynamic_skills: set[str] = set()
+
+    try:
+        lang_resp = http_requests.get(
+            f"{repo_api_url}/languages", headers=headers, timeout=10
+        )
+        if lang_resp.status_code == 200:
+            dynamic_skills.update(k.lower() for k in lang_resp.json())
+    except http_requests.RequestException:
+        pass
+
+    try:
+        topic_resp = http_requests.get(
+            f"{repo_api_url}/topics",
+            headers={**headers, "Accept": "application/vnd.github.mercy-preview+json"},
+            timeout=10,
+        )
+        if topic_resp.status_code == 200:
+            dynamic_skills.update(t.lower() for t in topic_resp.json().get("names", []))
+    except http_requests.RequestException:
+        pass
+
+    # Fresh extractor per call — prevents skill leakage across repos
+    extractor = SkillExtractor(
+        model=_get_model(),
+        custom_skills=sorted(dynamic_skills) if dynamic_skills else None,
+    )
 
     all_skills: list[str] = []
     for issue in response.json():

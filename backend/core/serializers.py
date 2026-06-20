@@ -6,7 +6,6 @@ from .models import (
     LearnerProfile,
     Recommendation,
     Repository,
-    UserProfile,
 )
 
 
@@ -32,33 +31,6 @@ class RepositorySerializer(serializers.ModelSerializer):
             "skills_found",
             "error_message",
         ]
-
-
-class UserProfileSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = UserProfile
-        fields = ["skills", "target_repo"]
-
-    def validate_skills(self, value):
-        valid_bands = {"beginner", "intermediate", "advanced"}
-
-        if not isinstance(value, list):
-            raise serializers.ValidationError("Skills must be a list.")
-
-        for item in value:
-            if not isinstance(item, dict):
-                raise serializers.ValidationError(
-                    "Each skill must be a dictionary with skill and band."
-                )
-            if "skill" not in item or "band" not in item:
-                raise serializers.ValidationError(
-                    "Each skill must have 'skill' and 'band' keys."
-                )
-            if item["band"] not in valid_bands:
-                raise serializers.ValidationError(f"Band must be one of {valid_bands}.")
-            if not isinstance(item["skill"], str) or not item["skill"].strip():
-                raise serializers.ValidationError("Skill must be a non-empty string.")
-        return value
 
 
 class RecommendationSerializer(serializers.ModelSerializer):

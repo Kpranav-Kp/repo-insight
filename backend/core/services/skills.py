@@ -1,141 +1,109 @@
-# backend/core/services/skills.py
+from __future__ import annotations
+
 import re
+
+import numpy as np
+from sentence_transformers import SentenceTransformer
 
 
 class SkillExtractor:
+    # Universal concepts only — specific languages / frameworks / tools
+    # are discovered dynamically from each repo (Languages API, Topics API,
+    # dependency files). This seed exists to catch cross-cutting concepts
+    # that don't correspond to any single technology.
     SKILLS_DB = {
-        # Languages
-        "python",
-        "javascript",
-        "typescript",
-        "java",
-        "go",
-        "rust",
-        "c++",
-        "c#",
-        "ruby",
-        "php",
-        # Web
-        "react",
-        "vue",
-        "angular",
-        "svelte",
-        "next.js",
-        "nuxt",
-        "html",
-        "css",
-        "sass",
-        "less",
-        # Backend
-        "django",
-        "flask",
-        "fastapi",
-        "express",
-        "spring",
-        "rails",
-        "laravel",
-        # Databases
-        "sql",
-        "postgresql",
-        "mysql",
-        "sqlite",
-        "mongodb",
-        "redis",
-        "elasticsearch",
-        "dynamodb",
-        # DevOps
-        "docker",
-        "kubernetes",
-        "terraform",
-        "ansible",
-        "jenkins",
-        "github actions",
-        "gitlab ci",
-        # Cloud
-        "aws",
-        "gcp",
-        "azure",
-        "vercel",
-        "netlify",
-        "heroku",
-        # ML/AI
-        "tensorflow",
-        "pytorch",
-        "scikit-learn",
-        "pandas",
-        "numpy",
-        "machine learning",
-        "ai",
-        "llm",
-        # Tools
-        "git",
-        "webpack",
-        "vite",
-        "babel",
-        "eslint",
-        "prettier",
-        # Concepts
         "api",
-        "graphql",
-        "rest",
-        "websocket",
-        "oauth",
-        "jwt",
         "authentication",
         "authorization",
-        "microservices",
-        "serverless",
+        "caching",
         "ci/cd",
+        "cli",
+        "configuration",
+        "database",
+        "deployment",
+        "documentation",
+        "error handling",
+        "logging",
+        "migration",
+        "monitoring",
+        "networking",
+        "observability",
+        "performance",
+        "refactoring",
+        "security",
+        "serialization",
+        "serverless",
+        "storage",
         "testing",
-        "tdd",
-        "agile",
+        "validation",
+        "webhook",
     }
 
-    def __init__(self, custom_skills: list[str] | None = None):
+    MATCH_THRESHOLD = 0.35
+
+    def __init__(self, model=None, custom_skills: list[str] | None = None):
+        self._model: SentenceTransformer | None = model
         self.skills = self.SKILLS_DB.copy()
         if custom_skills:
             self.skills.update(s.lower() for s in custom_skills)
-        self._compile_patterns()
+        self._skill_list = sorted(self.skills)
+        self._skill_embeddings: np.ndarray | None = None
 
-    def _compile_patterns(self):
-        self._patterns = {
-            skill: re.compile(rf"(?:^|\s)({re.escape(skill)})(?=\s|$)", re.IGNORECASE)
-            for skill in self.skills
-        }
+    def _get_skill_embeddings(self) -> np.ndarray | None:
+        if self._skill_embeddings is not None:
+            return self._skill_embeddings
+        if self._model is None:
+            return None
+        self._skill_embeddings = np.asarray(
+            self._model.encode(
+                self._skill_list,
+                normalize_embeddings=True,
+                show_progress_bar=False,
+            )
+        ).astype("float32")
+        return self._skill_embeddings
 
     def extract(self, text: str) -> list[str]:
         if not text:
             return []
-
-        found = set()
-        for skill, pattern in self._patterns.items():
-            if pattern.search(text):
-                found.add(skill)
+        emb = self._get_skill_embeddings()
+        model = self._model
+        if emb is not None and model is not None:
+            text_vec = np.asarray(
+                model.encode([text], normalize_embeddings=True, show_progress_bar=False)
+            ).astype("float32")
+            sims = text_vec @ emb.T
+            mask = sims[0] > self.MATCH_THRESHOLD
+            found = {
+                self._skill_list[i] for i in range(len(self._skill_list)) if mask[i]
+            }
+        else:
+            found = set()
+            for skill in self._skill_list:
+                pattern = re.compile(
+                    rf"(?:^|\s)({re.escape(skill)})(?=\s|$)", re.IGNORECASE
+                )
+                if pattern.search(text):
+                    found.add(skill)
 
         return sorted(found)
 
-    def _format_skill(self, skill: str) -> str:
-        return " ".join(word.capitalize() for word in skill.split())
-
     def add_skills(self, skills: list[str]):
-        self.skills.update(s.lower() for s in skills)
-        self._compile_patterns()
+        new = [s.lower() for s in skills if s.lower() not in self.skills]
+        if not new:
+            return
+        self.skills.update(new)
+        self._skill_list = sorted(self.skills)
+        self._skill_embeddings = None
 
 
-def extract_issue_metadata(title: str, body: str, labels: list[str]) -> dict:
-    """
-    Extract skills and difficulty from an issue's title, body, and labels.
-    Returns a dict: {"skills": list[str], "difficulty": "beginner"|"intermediate"|"advanced"}
-    """
-    extractor = SkillExtractor()
+def extract_issue_metadata(
+    title: str, body: str, labels: list[str], extractor: SkillExtractor | None = None
+) -> dict:
+    if extractor is None:
+        extractor = SkillExtractor()
     text = f"{title} {body}"
     skills = extractor.extract(text)
-
-    text_lower = text.lower()
-    for phrase in ("github actions", "gitlab ci", "ci/cd"):
-        if phrase in text_lower:
-            skills.append(phrase)
-    skills = sorted(set(skills))
 
     difficulty = "intermediate"
 
@@ -152,7 +120,7 @@ def extract_issue_metadata(title: str, body: str, labels: list[str]) -> dict:
     }
 
     if any(label in label_lower for label in beginner_labels) or any(
-        kw in text_lower for kw in beginner_keywords
+        kw in text.lower() for kw in beginner_keywords
     ):
         difficulty = "beginner"
 
@@ -160,7 +128,7 @@ def extract_issue_metadata(title: str, body: str, labels: list[str]) -> dict:
     advanced_keywords = {"architecture", "runtime", "compiler", "refactor", "memory"}
 
     if any(label in label_lower for label in advanced_labels) or any(
-        kw in text_lower for kw in advanced_keywords
+        kw in text.lower() for kw in advanced_keywords
     ):
         difficulty = "advanced"
 

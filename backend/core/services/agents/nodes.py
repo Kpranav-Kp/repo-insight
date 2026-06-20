@@ -20,6 +20,7 @@ from pydantic import SecretStr
 
 from ..graph_loader import load_engine_for_repo
 from .state import AgentState
+from .tools import _get_model as _get_sentence_model
 from .tools import fetch_code_snippet, fetch_repo_skills
 
 logger = logging.getLogger(__name__)
@@ -107,18 +108,30 @@ def onboarding_node(state: AgentState) -> AgentState:
                 "conversation_phase": "onboarding",
             }
 
-        skill_extractor = SkillExtractor()
+        repo = Repository.objects.get(id=state["repo_id"])
+        repo_skills_set = set(s.lower() for s in repo.skills_found or [])
 
         last_user_msg = _last_user_message(messages)
+        text_lower = last_user_msg.lower()
+
+        # 1. Embedding-based extraction via model-backed extractor
+        skill_extractor = SkillExtractor(
+            model=_get_sentence_model(),
+            custom_skills=sorted(repo_skills_set),
+        )
         extracted_skill_names = skill_extractor.extract(last_user_msg)
 
-        repo = Repository.objects.get(id=state["repo_id"])
-        repo_skills_set = set(repo.skills_found)
+        # 2. Direct substring match — catches exact skill names in user text
+        direct_matches = [s for s in repo_skills_set if s.lower() in text_lower]
 
-        valid_skills = [s for s in extracted_skill_names if s in repo_skills_set]
+        valid_skill_names = {
+            s
+            for s in extracted_skill_names + direct_matches
+            if s.lower() in repo_skills_set
+        }
 
-        if valid_skills:
-            skills = [{"skill": s, "band": "intermediate"} for s in valid_skills]
+        if valid_skill_names:
+            skills = [{"skill": s, "band": "intermediate"} for s in valid_skill_names]
             reply = "Great! Let me find the best issues for you — one moment."
             return {
                 **state,

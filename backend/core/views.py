@@ -279,135 +279,6 @@ class LearnerProfileView(APIView):
         return Response(serializer.data)
 
 
-class UpdateUsernameView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def patch(self, request):
-        new_username = request.data.get("username", "").strip()
-        if not new_username:
-            return Response({"error": "Username is required"}, status=400)
-
-        if (
-            User.objects.filter(username=new_username)
-            .exclude(pk=request.user.pk)
-            .exists()
-        ):
-            return Response({"error": "Username already taken"}, status=400)
-
-        request.user.username = new_username
-        request.user.save()
-        return Response({"username": new_username})
-
-
-class ResendVerificationView(APIView):
-    permission_classes = []
-
-    def post(self, request):
-        email = request.data.get("email", "").strip()
-        if not email:
-            return Response({"error": "Email is required"}, status=400)
-
-        try:
-            resp = requests.post(
-                f"{settings.SUPABASE_URL}/auth/v1/resend",
-                headers={
-                    "apikey": settings.SUPABASE_PUBLISHABLE_KEY,
-                    "Content-Type": "application/json",
-                },
-                json={"type": "signup", "email": email},
-                timeout=10,
-            )
-            if not resp.ok:
-                return Response(
-                    {"error": "Failed to resend verification email"},
-                    status=resp.status_code,
-                )
-        except requests.RequestException as e:
-            return Response({"error": f"Unable to send email: {e}"}, status=502)
-
-        return Response({"message": "Verification email sent"})
-
-
-class SignupView(APIView):
-    permission_classes = []
-
-    def post(self, request):
-        username = request.data.get("username")
-        email = request.data.get("email")
-        password = request.data.get("password")
-        password2 = request.data.get("password2")
-
-        if not username or not email or not password or not password2:
-            return Response({"error": "All fields required"}, status=400)
-
-        if password != password2:
-            return Response({"error": "Passwords do not match"}, status=400)
-
-        if User.objects.filter(username=username).exists():
-            return Response({"error": "Username taken"}, status=400)
-
-        if User.objects.filter(email=email).exists():
-            return Response({"error": "Email already exists"}, status=400)
-
-        _ = User.objects.create_user(username=username, email=email, password=password)
-
-        return Response({"message": "User created"})
-
-
-class LoginView(APIView):
-    permission_classes = []
-
-    def post(self, request):
-        email = request.data.get("email")
-        password = request.data.get("password")
-
-        if not email or not password:
-            return Response({"error": "Email and password required"}, status=400)
-
-        try:
-            user = User.objects.get(email=email)
-        except User.DoesNotExist:
-            return Response({"error": "Invalid credentials"}, status=401)
-
-        if not user.check_password(password):
-            return Response({"error": "Invalid credentials"}, status=401)
-
-        refresh = RefreshToken.for_user(user)
-        access_token = str(refresh.access_token)
-        refresh_token = str(refresh)
-
-        response = JsonResponse(
-            {
-                "username": user.username,
-            }
-        )
-        response.set_cookie(
-            "access_token",
-            access_token,
-            httponly=True,
-            secure=settings.SIMPLE_JWT["AUTH_COOKIE_SECURE"],
-            samesite=settings.SIMPLE_JWT["AUTH_COOKIE_SAMESITE"],
-        )
-        response.set_cookie(
-            "refresh_token",
-            refresh_token,
-            httponly=True,
-            secure=settings.SIMPLE_JWT["AUTH_COOKIE_SECURE"],
-            samesite=settings.SIMPLE_JWT["AUTH_COOKIE_SAMESITE"],
-        )
-        return response
-
-
-class LogoutView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        response = Response({"message": "Logged out"})
-        response.delete_cookie("access_token")
-        response.delete_cookie("refresh_token")
-        return response
-
-
 class SupabaseLoginView(APIView):
     permission_classes = []
 
@@ -487,7 +358,6 @@ class SupabaseLoginView(APIView):
                         profile, created = UserProfile.objects.get_or_create(user=user)
                         if created or profile.supabase_uid != supabase_uid:
                             profile.supabase_uid = supabase_uid
-                            profile.email_verified = True
                             profile.save()
                         logger.info(
                             f"SupabaseLoginView: Linked existing user {user.username} to supabase_uid {supabase_uid}"
@@ -508,7 +378,6 @@ class SupabaseLoginView(APIView):
                         profile = UserProfile.objects.create(
                             user=user,
                             supabase_uid=supabase_uid,
-                            email_verified=True,
                         )
         except Exception as e:
             return Response({"error": f"Failed to create user: {str(e)}"}, status=500)
@@ -631,8 +500,7 @@ class RecommendationView(APIView):
 
             if not recommendations:
                 # No matching issues - generate learning path
-                all_issues = engine.graph.issues.meta
-                learning_path = generate_learning_path(all_issues)
+                learning_path = generate_learning_path(engine.graph, user_skill_names)
                 return Response(
                     {
                         "status": "no_match",

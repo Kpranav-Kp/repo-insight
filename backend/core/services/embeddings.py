@@ -104,34 +104,6 @@ class EmbeddingService:
 
         return results
 
-    def search_by_vector(
-        self, vector: np.ndarray, top_k: int = 5
-    ) -> list[SearchResult]:
-        if self.index is None:
-            return []
-
-        vector = vector.reshape(1, -1).astype("float32")
-        scores, indices = self.index.search(vector, top_k)  # type: ignore
-
-        results = []
-        for score, idx in zip(scores[0], indices[0], strict=False):
-            if idx == -1:
-                continue
-
-            id_ = self.index_to_id.get(int(idx))
-            if id_:
-                results.append(
-                    SearchResult(
-                        id=id_, score=float(score), metadata=self.metadata.get(id_, {})
-                    )
-                )
-
-        return results
-
-    def cosine_similarity(self, text1: str, text2: str) -> float:
-        vecs = self.encode([text1, text2])
-        return float(np.dot(vecs[0], vecs[1]))
-
     def save(self, path: str):
         if self.index is None:
             raise ValueError("No index to save. Call build_index() first.")

@@ -284,16 +284,6 @@ class SemanticGraph:
                 return edge["weight"]
         return None
 
-    def is_duplicate_issue(self, new_issue_text: str) -> tuple[bool, dict | None]:
-        """
-        Returns (True, matched_issue) if similarity >= DEDUP_THRESHOLD,
-        else (False, None).
-        """
-        results = self.issues.search(new_issue_text, top_k=1)
-        if results and results[0]["score"] >= self.DEDUP_THRESHOLD:
-            return True, results[0]
-        return False, None
-
     def novelty_score(self, recommendation_text: str, issue_id: str) -> float:
         """
         novelty = 1 - max_cosine_sim(recommendation, existing PRs for this issue)
