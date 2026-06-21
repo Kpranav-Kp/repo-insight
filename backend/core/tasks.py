@@ -3,6 +3,7 @@ import os
 
 from celery import shared_task
 from django.conf import settings
+from django.core.cache import cache
 
 from core.services.agents.tools import fetch_contributing_guidelines
 
@@ -13,13 +14,28 @@ from .services.recommender import RecommendationEngine
 
 logger = logging.getLogger(__name__)
 
+LOCK_TIMEOUT = 600  # 10 minutes — auto-releases if worker crashes
 
-@shared_task
-def analyze_repository_task(repo_id: int):
+
+@shared_task(bind=True, max_retries=2)
+def analyze_repository_task(self, repo_id: int):
+    lock_key = f"repo_build:{repo_id}"
+    if not cache.add(lock_key, "locked", LOCK_TIMEOUT):
+        logger.info(
+            "Task for repo %d already running on another worker, skipping", repo_id
+        )
+        return {"skipped": True}
+
     try:
         repo = Repository.objects.get(id=repo_id)
     except Repository.DoesNotExist as e:
+        cache.delete(lock_key)
         raise ValueError("Repository not found") from e
+
+    repo.refresh_from_db()
+    if repo.status == "completed":
+        cache.delete(lock_key)
+        return {"cached": True}
 
     try:
         engine = RecommendationEngine(github_token=settings.GITHUB_TOKEN)
@@ -51,6 +67,8 @@ def analyze_repository_task(repo_id: int):
         repo.error_message = str(e)
         repo.save()
         raise e
+    finally:
+        cache.delete(lock_key)
 
 
 @shared_task

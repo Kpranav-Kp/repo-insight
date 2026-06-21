@@ -1,5 +1,4 @@
 import logging
-import os
 import re
 
 import requests
@@ -87,22 +86,34 @@ class RepositoryAnalyzeView(APIView):
                     return Response(RepositorySerializer(repo).data)
 
                 if repo.status == "processing":
-                    logger.info(
-                        f"RepositoryAnalyzeView: Repository already processing: {repo.pk}"
+                    stuck = (
+                        repo.updated_at
+                        and timezone.now() - repo.updated_at > timedelta(minutes=30)
                     )
-                    return Response(
-                        {
-                            "message": "Repository analysis already in progress.",
-                            "repository_id": repo.pk,
-                            "task_id": repo.task_id,
-                        },
-                        status=status.HTTP_202_ACCEPTED,
-                    )
+                    if stuck:
+                        logger.warning(
+                            f"RepositoryAnalyzeView: Repo {repo.pk} stuck in processing "
+                            f"since {repo.updated_at}, resetting"
+                        )
+                        repo.status = "pending"
+                    else:
+                        logger.info(
+                            f"RepositoryAnalyzeView: Repository already processing: {repo.pk}"
+                        )
+                        return Response(
+                            {
+                                "message": "Repository analysis already in progress.",
+                                "repository_id": repo.pk,
+                                "task_id": repo.task_id,
+                            },
+                            status=status.HTTP_202_ACCEPTED,
+                        )
 
-                repo.status = "processing"
-                repo.error_message = ""
-                repo.task_id = ""
-                repo.save()
+                if repo.status != "processing":
+                    repo.status = "processing"
+                    repo.error_message = ""
+                    repo.task_id = ""
+                    repo.save()
 
             async_result = analyze_repository_task.delay(repo.pk)
             Repository.objects.filter(id=repo.pk).update(task_id=async_result.id)
@@ -449,8 +460,8 @@ class RecommendationView(APIView):
 
     def get(self, request, session_id):
         """Get recommended issues based on user's selected skills."""
+        from .services.graph_loader import load_engine_for_repo
         from .services.learning_path import generate_learning_path
-        from .services.recommender import RecommendationEngine
 
         session = get_object_or_404(
             ConversationSession, id=session_id, user=request.user
@@ -473,17 +484,7 @@ class RecommendationView(APIView):
         exclude_ids = {str(num) for num in claimed}
 
         try:
-            index_path = repo.index_path
-            if not index_path or not os.path.exists(index_path):
-                return Response(
-                    {
-                        "error": "Repository index not found. Please re-analyze the repository."
-                    },
-                    status=status.HTTP_404_NOT_FOUND,
-                )
-
-            engine = RecommendationEngine()
-            engine.load_index(index_path)
+            engine = load_engine_for_repo(repo.pk)
 
             if not user_skill_names:
                 sk = repo.skills_found or []
