@@ -182,18 +182,25 @@ class RecommendationEngine:
         )
 
         if not candidates:
+            candidates = self._label_fallback(
+                user_skill_names,
+                band_weights_for_search,
+                top_k=top_k * 3,
+            )
+
+        if not candidates:
             return []
 
-        filtered = []
         resolved_ids = self._resolved_issue_ids()
+
+        filtered = []
         for cand in candidates:
             issue_id = cand["id"]
             if cand.get("state") != "open":
                 continue
-            if issue_id in resolved_ids:
-                continue
             if issue_id in exclude_issue_ids:
                 continue
+            cand["_has_pr_hist"] = issue_id in resolved_ids
             filtered.append(cand)
 
         if not filtered:
@@ -204,16 +211,14 @@ class RecommendationEngine:
         for cid in list(candidate_ids):
             connected = self.graph.get_connected_issues(cid)
             for conn in connected:
-                if (
-                    conn not in expanded_ids
-                    and conn not in resolved_ids
-                    and conn not in exclude_issue_ids
-                ):
+                if conn not in expanded_ids and conn not in exclude_issue_ids:
                     expanded_ids.add(conn)
 
         seen_ids = {c["id"] for c in filtered}
         if expanded_ids - seen_ids:
             extra = self.graph.get_issues_by_ids(expanded_ids - seen_ids)
+            for e in extra:
+                e["_has_pr_hist"] = e.get("id", "") in resolved_ids
             filtered.extend(extra)
 
         user_skills_set = set(s.lower() for s in user_skill_names)
@@ -269,6 +274,8 @@ class RecommendationEngine:
             skill_component = skill_overlap if issue_skills else edge_score
             coverage_component = user_coverage if issue_skills else edge_score * 0.5
 
+            pr_penalty = 0.5 if cand.get("_has_pr_hist") else 1.0
+
             final_score = (
                 0.25 * skill_component
                 + 0.25 * edge_score
@@ -276,7 +283,7 @@ class RecommendationEngine:
                 + 0.10 * difficulty_score
                 + 0.10 * normalized_label
                 + 0.15 * recency_score
-            )
+            ) * pr_penalty
 
             cand["skill_overlap"] = sorted(overlap_skills)
             cand["match_score"] = round(
@@ -294,6 +301,33 @@ class RecommendationEngine:
 
         diverse = self._diversify(scored, top_k)
         return diverse[:top_k]
+
+    def _label_fallback(
+        self,
+        user_skills: list[str],
+        band_weights: dict[str, float],
+        top_k: int,
+    ) -> list[dict]:
+        user_skills_lower = {s.lower() for s in user_skills}
+        scored = []
+
+        for meta in self.graph.issues.meta:
+            if meta.get("state") != "open":
+                continue
+            issue_skills = set(skill.lower() for skill in meta.get("skills", []))
+            issue_labels = set(label.lower() for label in meta.get("labels", []))
+            matched = user_skills_lower & (issue_skills | issue_labels)
+            if not matched:
+                continue
+
+            score = sum(band_weights.get(s, 0.3) for s in matched)
+            entry = {k: v for k, v in meta.items() if k != "_text"}
+            entry["score"] = round(score, 4)
+            entry["matched_skills"] = sorted(matched)
+            scored.append(entry)
+
+        scored.sort(key=lambda x: x["score"], reverse=True)
+        return scored[:top_k]
 
     def _resolved_issue_ids(self) -> set[str]:
         resolved = set()
