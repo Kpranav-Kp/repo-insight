@@ -42,7 +42,7 @@ export default function ChatPage({ onLogout }) {
   return (
     <div
       className={`relative h-screen overflow-hidden transition-colors duration-300 ${
-        isDark ? "bg-[#0A0A0A] text-white" : "bg-[#FAFAFA] text-[#1a1a1a]"
+        isDark ? "bg-[#18181b] text-white" : "bg-[#FAFAFA] text-[#1a1a1a]"
       }`}
     >
       <div className="relative flex h-full p-3 gap-3">
@@ -50,7 +50,7 @@ export default function ChatPage({ onLogout }) {
         <div
           className={`hidden md:block shrink-0 rounded-2xl overflow-hidden transition-all duration-300 ${
             isDark
-              ? "bg-[#171717] border border-white/6"
+              ? "bg-[#242424] border border-white/6"
               : "bg-white border border-black/6 shadow-sm"
           }`}
         >
@@ -80,7 +80,7 @@ export default function ChatPage({ onLogout }) {
               <div
                 className={`h-full rounded-r-2xl overflow-hidden ${
                   isDark
-                    ? "bg-[#171717] border-r border-white/6"
+                    ? "bg-[#242424] border-r border-white/6"
                     : "bg-white border-r border-black/6 shadow-sm"
                 }`}
               >
@@ -103,7 +103,7 @@ export default function ChatPage({ onLogout }) {
         <div
           className={`flex-1 min-w-0 rounded-2xl overflow-hidden transition-colors duration-300 ${
             isDark
-              ? "bg-[#171717] border border-white/6"
+              ? "bg-[#242424] border border-white/6"
               : "bg-white border border-black/6 shadow-sm"
           }`}
         >
@@ -128,7 +128,11 @@ export default function ChatPage({ onLogout }) {
             </Link>
           </div>
 
-          <CurrentSession key={chatKey} activeSession={activeSession} />
+          <CurrentSession
+            key={chatKey}
+            activeSession={activeSession}
+            user={user}
+          />
         </div>
       </div>
     </div>

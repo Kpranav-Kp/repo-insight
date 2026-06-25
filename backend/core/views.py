@@ -1,7 +1,9 @@
 import logging
 import re
+from typing import Any
 
 import requests
+from celery.result import AsyncResult
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.db import transaction
@@ -30,6 +32,11 @@ from .serializers import (
     StructuredSkillsSerializer,
 )
 from .tasks import analyze_repository_task, run_chat_task
+
+
+def _delay(task: Any, *args: Any, **kwargs: Any) -> AsyncResult:
+    return task.delay(*args, **kwargs)
+
 
 # Create your views here.
 logger = logging.getLogger(__name__)
@@ -115,7 +122,7 @@ class RepositoryAnalyzeView(APIView):
                     repo.task_id = ""
                     repo.save()
 
-            async_result = analyze_repository_task.delay(repo.pk)
+            async_result = _delay(analyze_repository_task, repo.pk)
             Repository.objects.filter(id=repo.pk).update(task_id=async_result.id)
 
             logger.info(
@@ -168,7 +175,7 @@ class ChatMessageView(APIView):
         current_state["messages"].append({"role": "user", "content": user_message})
 
         # ← Send to Celery, don't wait
-        task = run_chat_task.delay(session_id, current_state)
+        task = _delay(run_chat_task, session_id, current_state)
         return Response(
             {
                 "task_id": task.id,
@@ -526,6 +533,7 @@ class RecommendationView(APIView):
                         "combined_score": rec.get("combined_score", 0),
                         "match_score": rec.get("match_score", 0),
                         "summary": rec.get("summary", ""),
+                        "created_at": rec.get("created_at", ""),
                     }
                 )
 

@@ -66,8 +66,8 @@ export function ChatSidebar({
           expanded ? "w-64" : "w-14",
         )}
       >
-        {/* Top: expand/collapse + New Chat */}
-        <div className="flex shrink-0 items-center gap-2 p-3">
+        {/* Top: brand + expand/collapse */}
+        <div className="flex shrink-0 items-center gap-2 p-3 pb-1">
           <button
             onClick={() => setExpanded(!expanded)}
             className={`p-2 rounded-xl transition-colors ${
@@ -85,9 +85,20 @@ export function ChatSidebar({
           </button>
 
           {expanded && (
+            <span
+              className={`text-xs font-semibold tracking-widest ${isDark ? "text-white/50" : "text-black/50"}`}
+            >
+              RepoInsight
+            </span>
+          )}
+        </div>
+
+        {/* New Chat below brand */}
+        {expanded && (
+          <div className="px-3 pb-2">
             <button
               onClick={onNewChat}
-              className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-medium py-2 rounded-xl transition-all ${
+              className={`w-full flex items-center justify-center gap-1.5 text-xs font-medium py-2 rounded-xl transition-all ${
                 isDark
                   ? "bg-white text-black hover:bg-white/90"
                   : "bg-[#000000] text-white hover:bg-[#2541B2]"
@@ -96,8 +107,8 @@ export function ChatSidebar({
               <Plus className="h-3.5 w-3.5" />
               New Chat
             </button>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Session list */}
         {expanded && (
@@ -129,12 +140,7 @@ export function ChatSidebar({
                   )}
                 >
                   <div className="truncate font-medium">
-                    {s.repoLabel || "Untitled"}
-                  </div>
-                  <div
-                    className={`text-[10px] mt-0.5 ${isDark ? "text-white/25" : "text-black/25"}`}
-                  >
-                    {s.phase || ""}
+                    {s.issueLabel || s.repoLabel || "Untitled"}
                   </div>
                 </button>
 
@@ -184,9 +190,9 @@ export function ChatSidebar({
             <Popover.Portal>
               <Popover.Positioner>
                 <Popover.Popup
-                  className={`z-[60] w-52 rounded-2xl border p-2 shadow-2xl ${
+                  className={`z-60 w-52 rounded-2xl border p-2 shadow-2xl ${
                     isDark
-                      ? "border-white/10 bg-[#1a1a1a]"
+                      ? "border-white/10 bg-[#242424]"
                       : "border-black/10 bg-white"
                   }`}
                 >

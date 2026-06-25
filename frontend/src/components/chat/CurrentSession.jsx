@@ -16,7 +16,23 @@ const WELCOME = {
     "Hey! I'm here to help you find a meaningful open source issue to work on — and guide you through it without handing you the solution.\n\nWhat's the GitHub repo URL you'd like to contribute to?",
 };
 
-export function CurrentSession({ activeSession }) {
+function formatDate(iso) {
+  try {
+    const d = new Date(iso.replace("Z", "+00:00").replace(" ", "T"));
+    if (isNaN(d.getTime())) return "";
+    const now = new Date();
+    const diffMs = now - d;
+    const diffDays = Math.floor(diffMs / 86400000);
+    if (diffDays < 1) return "today";
+    if (diffDays < 30) return `${diffDays}d ago`;
+    if (diffDays < 365) return `${Math.floor(diffDays / 30)}mo ago`;
+    return `${Math.floor(diffDays / 365)}y ago`;
+  } catch {
+    return "";
+  }
+}
+
+export function CurrentSession({ activeSession, user }) {
   const { theme } = useTheme();
   const isDark = theme === "dark";
   const mountedRef = useRef(true);
@@ -45,7 +61,9 @@ export function CurrentSession({ activeSession }) {
   const [input, setInput] = useState("");
   const [error, setError] = useState(null);
   const [repoSkills, setRepoSkills] = useState([]);
-  const [selectedSkills, setSelectedSkills] = useState([]);
+  const [selectedSkills, setSelectedSkills] = useState(
+    activeSession?.selectedSkills || [],
+  );
   const [extraSkillsInput, setExtraSkillsInput] = useState("");
   const [_showExtraSkills, setShowExtraSkills] = useState(false);
   const [_hasContributionHistory, setHasContributionHistory] = useState(false);
@@ -54,15 +72,27 @@ export function CurrentSession({ activeSession }) {
   );
   const [_, setRecommendations] = useState([]);
   const localIdRef = useRef(activeSession?.localId ?? newLocalId());
+  const [isAtBottom, setIsAtBottom] = useState(true);
+  const [skillBarExpanded, setSkillBarExpanded] = useState(false);
+  const [issueLabel, setIssueLabel] = useState(activeSession?.issueLabel || "");
   const scrollRef = useRef(null);
   const textareaRef = useRef(null);
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({
-      top: scrollRef.current.scrollHeight,
-      behavior: "smooth",
-    });
-  }, [messages]);
+    if (isAtBottom) {
+      scrollRef.current?.scrollTo({
+        top: scrollRef.current.scrollHeight,
+        behavior: "smooth",
+      });
+    }
+  }, [messages, isAtBottom]);
+
+  const handleScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
+    setIsAtBottom(atBottom);
+  };
 
   useEffect(() => {
     if (!repoLabel && messages.length <= 1) return;
@@ -74,9 +104,20 @@ export function CurrentSession({ activeSession }) {
       phase,
       messages,
       selectedIssueId,
+      issueLabel,
+      selectedSkills,
       updatedAt: Date.now(),
     });
-  }, [repoUrl, repoLabel, sessionId, phase, messages, selectedIssueId]);
+  }, [
+    repoUrl,
+    repoLabel,
+    sessionId,
+    phase,
+    messages,
+    selectedIssueId,
+    issueLabel,
+    selectedSkills,
+  ]);
 
   const repoNameFromUrl = (url) =>
     url.replace(/\.git$/, "").replace(/^https?:\/\/github\.com\//, "");
@@ -106,7 +147,7 @@ export function CurrentSession({ activeSession }) {
         (r) => r.status === "completed" || r.status === "failed",
         {
           intervalMs: 2000,
-          timeoutMs: 5 * 60_000,
+          timeoutMs: 10 * 60_000,
           signal: abortControllerRef.current?.signal,
         },
       );
@@ -262,6 +303,7 @@ export function CurrentSession({ activeSession }) {
     try {
       await api.selectIssue(sessionId, issue);
       setSelectedIssueId(issue.id);
+      setIssueLabel(`#${issue.id}: ${issue.title}`);
       setStage("thinking");
 
       const userMessage = `I'll work on issue #${issue.id}: ${issue.title}`;
@@ -276,20 +318,19 @@ export function CurrentSession({ activeSession }) {
         () => api.chatResult(accepted.task_id),
         (r) => r.status === "done",
         {
-          intervalMs: 1500,
-          timeoutMs: 2 * 60_000,
+          intervalMs: 1000,
+          timeoutMs: 300000,
           signal: abortControllerRef.current?.signal,
         },
       );
 
-      if (result.status === "done") {
-        setPhase(result.phase || "guidance");
-        setMessages((prev) => [
-          ...prev,
-          { role: "ai", content: result.message },
-        ]);
-      }
-
+      setPhase(result.phase || "guidance");
+      setMessages((m) => {
+        const copy = [...m];
+        if (copy[copy.length - 1]?.pending) copy.pop();
+        copy.push({ role: "ai", content: result.message });
+        return copy;
+      });
       setStage("ready");
     } catch (err) {
       const errMsg =
@@ -315,20 +356,19 @@ export function CurrentSession({ activeSession }) {
         () => api.chatResult(accepted.task_id),
         (r) => r.status === "done",
         {
-          intervalMs: 1500,
-          timeoutMs: 2 * 60_000,
+          intervalMs: 1000,
+          timeoutMs: 300000,
           signal: abortControllerRef.current?.signal,
         },
       );
-      if (result.status === "done") {
-        setPhase(result.phase || phase);
-        setMessages((m) => {
-          const copy = [...m];
-          if (copy[copy.length - 1]?.pending) copy.pop();
-          copy.push({ role: "ai", content: result.message });
-          return copy;
-        });
-      }
+
+      setPhase(result.phase || phase);
+      setMessages((m) => {
+        const copy = [...m];
+        if (copy[copy.length - 1]?.pending) copy.pop();
+        copy.push({ role: "ai", content: result.message });
+        return copy;
+      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Something went wrong.";
       setError(msg);
@@ -420,11 +460,6 @@ export function CurrentSession({ activeSession }) {
   else if (stage === "recommendations")
     placeholderText = "Select an issue above...";
   else placeholderText = "Type a message...";
-
-  let statusText = "live";
-  if (busy) statusText = stage === "analyzing" ? "analyzing" : "thinking";
-  else if (stage === "skills") statusText = "skills";
-  else if (stage === "recommendations") statusText = "recommendations";
 
   const InputArea = (
     <div
@@ -662,7 +697,9 @@ export function CurrentSession({ activeSession }) {
             <h2
               className={`text-2xl font-bold mb-2 ${isDark ? "text-white" : "text-black"}`}
             >
-              Let&apos;s find your next open-source contribution
+              {user?.name
+                ? `Hey ${user.name} — let's find your next contribution`
+                : "Let's find your next open-source contribution"}
             </h2>
             <p
               className={`text-sm mb-8 ${isDark ? "text-white/40" : "text-black/40"}`}
@@ -681,44 +718,70 @@ export function CurrentSession({ activeSession }) {
     <div className="flex h-full flex-col">
       {/* Header */}
       <div
-        className={`flex items-center justify-between px-6 py-3 border-b ${
+        className={`flex items-center px-6 py-3 border-b ${
           isDark ? "border-white/6" : "border-black/6"
         }`}
       >
-        <div className="flex items-center gap-3">
-          <span
-            className={`font-semibold text-sm ${isDark ? "text-white" : "text-black"}`}
+        <span
+          className={`font-semibold text-sm ${isDark ? "text-white" : "text-black"}`}
+        >
+          {repoLabel || "No repo selected"}
+        </span>
+      </div>
+
+      {/* Collapsible skill tags bar */}
+      {selectedSkills.length > 0 && stage !== "skills" && (
+        <div
+          className={`border-b ${isDark ? "border-white/6" : "border-black/6"}`}
+        >
+          <button
+            onClick={() => setSkillBarExpanded(!skillBarExpanded)}
+            className={`w-full flex items-center gap-2 px-6 py-2 text-xs transition-colors ${
+              isDark
+                ? "text-white/50 hover:bg-white/5 hover:text-white/70"
+                : "text-black/50 hover:bg-black/5 hover:text-black/70"
+            }`}
           >
-            {repoLabel || "No repo selected"}
-          </span>
-          {phase && repoLabel && (
-            <span
-              className={`rounded-lg px-2.5 py-0.5 text-[10px] font-medium ${
-                isDark
-                  ? "bg-[#2541B2]/20 text-[#1098F7]"
-                  : "bg-[#2541B2]/10 text-[#2541B2]"
-              }`}
-            >
-              {phase}
+            <span className="font-medium">
+              Skills:{" "}
+              {selectedSkills
+                .slice(0, 3)
+                .map((s) => s.skill)
+                .join(", ")}
+              {selectedSkills.length > 3 && (
+                <span className="opacity-50">
+                  {" "}
+                  +{selectedSkills.length - 3} more
+                </span>
+              )}
             </span>
+            <span className="ml-auto text-[10px] opacity-40">
+              {skillBarExpanded ? "▲" : "▼"}
+            </span>
+          </button>
+          {skillBarExpanded && (
+            <div className="flex flex-wrap gap-1.5 px-6 pb-3">
+              {selectedSkills.map((s) => (
+                <span
+                  key={s.skill}
+                  className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                    isDark
+                      ? "bg-white/5 text-white/60"
+                      : "bg-black/5 text-black/60"
+                  }`}
+                >
+                  {s.skill} — {s.band}
+                </span>
+              ))}
+            </div>
           )}
         </div>
-        <div
-          className={`flex items-center gap-2 text-[10px] ${isDark ? "text-white/30" : "text-black/30"}`}
-        >
-          <span
-            className={cn(
-              "w-1.5 h-1.5 rounded-full",
-              busy ? "bg-amber-400 animate-pulse" : "bg-emerald-400",
-            )}
-          />
-          {statusText}
-        </div>
-      </div>
+      )}
 
       {/* Messages */}
       <div
         ref={scrollRef}
+        onScroll={handleScroll}
         className="flex-1 overflow-y-auto px-6 py-6 space-y-6"
       >
         {messages.map((msg, i) => (
@@ -745,15 +808,13 @@ function MessageBubble({
   msg,
   selectedIssueId,
   onSelectIssue,
-  getButtonDisabledState,
-  getButtonClassName,
-  getButtonText,
   getDifficultyClass,
   isDark,
 }) {
   const isUser = msg.role === "user";
   const [copied, setCopied] = useState(false);
   const [feedback, setFeedback] = useState(null);
+  const [expandedIssueId, setExpandedIssueId] = useState(null);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(msg.content);
@@ -781,7 +842,9 @@ function MessageBubble({
           <span className="whitespace-pre-wrap text-sm">{msg.content}</span>
         ) : (
           <div className="w-full">
-            <div className="prose prose-sm max-w-none break-words">
+            <div
+              className={`prose prose-sm max-w-none wrap-break-words prose-headings:font-bold prose-h1:text-lg prose-h2:text-[17px] prose-h3:text-[15px] ${isDark ? "prose-invert" : ""}`}
+            >
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 rehypePlugins={[rehypeHighlight]}
@@ -834,7 +897,7 @@ function MessageBubble({
               </ReactMarkdown>
             </div>
 
-            {/* Inline recommendations */}
+            {/* Inline recommendations — single-column list */}
             {msg.recommendations && msg.recommendations.length > 0 && (
               <div
                 className={`mt-4 pt-4 ${isDark ? "border-t border-white/6" : "border-t border-black/6"}`}
@@ -844,77 +907,160 @@ function MessageBubble({
                 >
                   Recommended Issues
                 </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
                   {msg.recommendations.map((issue) => {
-                    const isThisSelected = selectedIssueId === issue.id;
-                    const hasAnySelected = selectedIssueId !== null;
+                    const isSelected = selectedIssueId === issue.id;
+                    const isExpanded = expandedIssueId === issue.id;
+                    const matchPct = Math.round(
+                      (issue.combined_score || 0) * 100,
+                    );
+                    const dateStr = issue.created_at
+                      ? formatDate(issue.created_at)
+                      : "";
                     return (
-                      <div
-                        key={issue.id}
-                        className={cn(
-                          "border rounded-xl p-4 space-y-3 transition-all",
-                          (() => {
-                            if (isThisSelected) {
-                              return "border-[#2541B2] ring-1 ring-[#2541B2]/20 bg-[#2541B2]/5";
-                            }
-                            return isDark
-                              ? "border-white/6 bg-white/2"
-                              : "border-black/6 bg-white";
-                          })(),
-                        )}
-                      >
-                        <div className="flex justify-between items-start gap-2">
-                          <h5
-                            className={`font-semibold text-sm leading-snug line-clamp-2 ${isDark ? "text-white" : "text-black"}`}
-                          >
-                            {issue.title}
-                          </h5>
-                          <span
-                            className={cn(
-                              "text-[10px] px-2 py-0.5 rounded-full font-medium shrink-0 uppercase tracking-wider",
-                              getDifficultyClass(issue.difficulty),
-                            )}
-                          >
-                            {issue.difficulty}
-                          </span>
-                        </div>
-
-                        {issue.summary && (
-                          <p
-                            className={`text-xs line-clamp-3 leading-relaxed ${isDark ? "text-white/40" : "text-black/40"}`}
-                          >
-                            {issue.summary}
-                          </p>
-                        )}
-
-                        <div className="flex flex-wrap gap-1">
-                          {issue.skills?.slice(0, 3).map((skill) => (
-                            <span
-                              key={skill}
-                              className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                                isDark
-                                  ? "bg-white/5 text-white/60"
-                                  : "bg-black/5 text-black/60"
-                              }`}
-                            >
-                              {skill}
-                            </span>
-                          ))}
-                        </div>
-
+                      <div key={issue.id} className="w-full">
                         <button
-                          disabled={getButtonDisabledState(
-                            isThisSelected,
-                            hasAnySelected,
-                          )}
-                          onClick={() => onSelectIssue(issue)}
-                          className={getButtonClassName(
-                            isThisSelected,
-                            hasAnySelected,
+                          onClick={() => {
+                            if (isSelected) return;
+                            setExpandedIssueId(isExpanded ? null : issue.id);
+                          }}
+                          className={cn(
+                            "w-full flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-xl border text-left transition-all",
+                            (() => {
+                              if (isSelected)
+                                return "border-[#2541B2] ring-1 ring-[#2541B2]/20 bg-[#2541B2]/5 opacity-70 cursor-default";
+                              if (isExpanded)
+                                return isDark
+                                  ? "border-white/10 bg-white/5 rounded-b-none"
+                                  : "border-black/10 bg-black/5 rounded-b-none";
+                              return isDark
+                                ? "border-white/6 bg-white/2 hover:bg-white/5"
+                                : "border-black/6 bg-white hover:bg-black/2";
+                            })(),
                           )}
                         >
-                          {getButtonText(isThisSelected, hasAnySelected)}
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span
+                              className={`text-sm font-semibold truncate ${isDark ? "text-white" : "text-black"}`}
+                            >
+                              {issue.title}
+                            </span>
+                            <span
+                              className={`text-xs shrink-0 ${isDark ? "text-white/30" : "text-black/30"}`}
+                            >
+                              #{issue.id}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span
+                              className={`text-xs font-medium ${isDark ? "text-white/60" : "text-black/60"}`}
+                            >
+                              {matchPct}%
+                            </span>
+                            {dateStr && (
+                              <span
+                                className={`text-[10px] ${isDark ? "text-white/35" : "text-black/35"}`}
+                              >
+                                {dateStr}
+                              </span>
+                            )}
+                            <span
+                              className={cn(
+                                "text-[10px] px-2 py-0.5 rounded-full font-medium uppercase tracking-wider",
+                                getDifficultyClass(issue.difficulty),
+                              )}
+                            >
+                              {issue.difficulty}
+                            </span>
+                          </div>
                         </button>
+
+                        {/* Expanded explanation panel */}
+                        {isExpanded && (
+                          <div
+                            className={cn(
+                              "px-3.5 pb-3 pt-2 border border-t-0 rounded-b-xl space-y-2.5",
+                              isDark
+                                ? "border-white/10 bg-white/5"
+                                : "border-black/10 bg-black/5",
+                            )}
+                          >
+                            {issue.summary && (
+                              <p
+                                className={`text-xs leading-relaxed ${isDark ? "text-white/50" : "text-black/50"}`}
+                              >
+                                {issue.summary}
+                              </p>
+                            )}
+
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                              <div
+                                className={`px-2 py-1.5 rounded-lg ${isDark ? "bg-white/3" : "bg-black/3"}`}
+                              >
+                                <span
+                                  className={`block font-medium ${isDark ? "text-white/80" : "text-black/80"}`}
+                                >
+                                  Combined
+                                </span>
+                                <span
+                                  className={`${isDark ? "text-white/40" : "text-black/40"}`}
+                                >
+                                  {matchPct}%
+                                </span>
+                              </div>
+                              <div
+                                className={`px-2 py-1.5 rounded-lg ${isDark ? "bg-white/3" : "bg-black/3"}`}
+                              >
+                                <span
+                                  className={`block font-medium ${isDark ? "text-white/80" : "text-black/80"}`}
+                                >
+                                  Match
+                                </span>
+                                <span
+                                  className={`${isDark ? "text-white/40" : "text-black/40"}`}
+                                >
+                                  {Math.round((issue.match_score || 0) * 100)}%
+                                </span>
+                              </div>
+                            </div>
+
+                            {issue.skills && issue.skills.length > 0 && (
+                              <div className="flex flex-wrap gap-1">
+                                {issue.skills.slice(0, 5).map((skill) => (
+                                  <span
+                                    key={skill}
+                                    className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                                      isDark
+                                        ? "bg-white/5 text-white/60"
+                                        : "bg-black/5 text-black/60"
+                                    }`}
+                                  >
+                                    {skill}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onSelectIssue(issue);
+                              }}
+                              disabled={!!selectedIssueId}
+                              className={`w-full py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                                !selectedIssueId
+                                  ? isDark
+                                    ? "bg-[#2541B2] text-white hover:bg-[#1098F7]"
+                                    : "bg-[#2541B2] text-white hover:bg-[#1098F7]"
+                                  : isDark
+                                    ? "bg-white/5 text-white/20 cursor-not-allowed"
+                                    : "bg-black/5 text-black/20 cursor-not-allowed"
+                              }`}
+                            >
+                              {isSelected ? "Selected" : "Select This Issue"}
+                            </button>
+                          </div>
+                        )}
                       </div>
                     );
                   })}

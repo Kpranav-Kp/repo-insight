@@ -21,6 +21,7 @@
     "@fontsource/abril-fatface": "^5.2.7",
     "@fontsource/cormorant-garamond": "^5.2.11",
     "@supabase/supabase-js": "^2.108.2",
+    "@tailwindcss/typography": "^0.5.20",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "framer-motion": "^12.40.0",

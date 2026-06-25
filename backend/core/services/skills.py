@@ -64,17 +64,25 @@ class SkillExtractor:
     def extract(self, text: str) -> list[str]:
         if not text:
             return []
+        return self.extract_many([text])[0]
+
+    def extract_many(self, texts: list[str]) -> list[list[str]]:
         emb = self._get_skill_embeddings()
         model = self._model
         if emb is None or model is None:
-            return []
-        text_vec = np.asarray(
-            model.encode([text], normalize_embeddings=True, show_progress_bar=False)
+            return [[] for _ in texts]
+        text_vecs = np.asarray(
+            model.encode(texts, normalize_embeddings=True, show_progress_bar=False)
         ).astype("float32")
-        sims = text_vec @ emb.T
-        mask = sims[0] > self.MATCH_THRESHOLD
-        found = {self._skill_list[i] for i in range(len(self._skill_list)) if mask[i]}
-        return sorted(found)
+        sims = text_vecs @ emb.T
+        results = []
+        for sim_row in sims:
+            mask = sim_row > self.MATCH_THRESHOLD
+            found = {
+                self._skill_list[i] for i in range(len(self._skill_list)) if mask[i]
+            }
+            results.append(sorted(found))
+        return results
 
     def add_skills(self, skills: list[str]):
         new = [s.lower() for s in skills if s.lower() not in self.skills]
@@ -91,39 +99,63 @@ def extract_issue_metadata(
     labels: list[str],
     extractor: SkillExtractor | None = None,
 ) -> dict:
+    return extract_issue_metadata_batch(
+        [f"{title} {body}"],
+        [labels],
+        extractor=extractor,
+    )[0]
+
+
+def extract_issue_metadata_batch(
+    texts: list[str],
+    labels_list: list[list[str]],
+    extractor: SkillExtractor | None = None,
+) -> list[dict]:
     if extractor is None:
         extractor = SkillExtractor()
-    text = f"{title} {body}"
-    skills = extractor.extract(text)
+    all_skills = extractor.extract_many(texts)
 
-    difficulty = "intermediate"
+    results = []
+    for text, labels, skills in zip(texts, labels_list, all_skills, strict=False):
+        difficulty = "intermediate"
 
-    label_lower = [label.lower() for label in labels]
-    beginner_labels = {"good first issue", "beginner", "easy", "help wanted"}
-    beginner_keywords = {
-        "typo",
-        "documentation",
-        "docs",
-        "example",
-        "sample",
-        "test",
-        "readme",
-    }
+        label_lower = [label.lower() for label in labels]
+        beginner_labels = {"good first issue", "beginner", "easy", "help wanted"}
+        beginner_keywords = {
+            "typo",
+            "documentation",
+            "docs",
+            "example",
+            "sample",
+            "test",
+            "readme",
+        }
 
-    if any(label in label_lower for label in beginner_labels) or any(
-        kw in text.lower() for kw in beginner_keywords
-    ):
-        difficulty = "beginner"
+        if any(label in label_lower for label in beginner_labels) or any(
+            kw in text.lower() for kw in beginner_keywords
+        ):
+            difficulty = "beginner"
 
-    advanced_labels = {"breaking change", "core", "performance", "advanced", "compiler"}
-    advanced_keywords = {"architecture", "runtime", "compiler", "refactor", "memory"}
+        advanced_labels = {
+            "breaking change",
+            "core",
+            "performance",
+            "advanced",
+            "compiler",
+        }
+        advanced_keywords = {
+            "architecture",
+            "runtime",
+            "compiler",
+            "refactor",
+            "memory",
+        }
 
-    if any(label in label_lower for label in advanced_labels) or any(
-        kw in text.lower() for kw in advanced_keywords
-    ):
-        difficulty = "advanced"
+        if any(label in label_lower for label in advanced_labels) or any(
+            kw in text.lower() for kw in advanced_keywords
+        ):
+            difficulty = "advanced"
 
-    return {
-        "skills": skills,
-        "difficulty": difficulty,
-    }
+        results.append({"skills": skills, "difficulty": difficulty})
+
+    return results

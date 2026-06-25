@@ -1,5 +1,6 @@
 import logging
 import math
+from collections import defaultdict
 from datetime import datetime
 
 from .embeddings import EmbeddingService, SearchResult
@@ -51,7 +52,14 @@ class NodeStore:
 
 class AdjacencyTable:
     def __init__(self):
-        self.edges: list[dict] = []
+        self._edges: dict[str, list[dict]] = defaultdict(list)
+
+    @property
+    def edges(self) -> list[dict]:
+        out = []
+        for rel_list in self._edges.values():
+            out.extend(rel_list)
+        return out
 
     def add_edge(
         self,
@@ -62,20 +70,19 @@ class AdjacencyTable:
         relation: str,
         weight: float,
     ):
-        self.edges.append(
-            {
-                "source_type": source_type,
-                "source_id": source_id,
-                "target_type": target_type,
-                "target_id": target_id,
-                "relation": relation,
-                "weight": round(weight, 4),
-            }
-        )
+        entry = {
+            "source_type": source_type,
+            "source_id": source_id,
+            "target_type": target_type,
+            "target_id": target_id,
+            "relation": relation,
+            "weight": round(weight, 4),
+        }
+        self._edges[relation].append(entry)
 
     def get_edges(self, relation: str | None = None) -> list[dict]:
         if relation:
-            return [e for e in self.edges if e["relation"] == relation]
+            return self._edges.get(relation, [])
         return self.edges
 
 
@@ -84,18 +91,33 @@ class SemanticGraph:
     ISSUE_ISSUE_SIM = "ISSUE_ISSUE_SIM"
     ISSUE_PR_HIST = "ISSUE_PR_HIST"
 
+    EDGE_TYPE_WEIGHTS = {
+        SKILL_ISSUE_SIM: 1.0,
+        ISSUE_ISSUE_SIM: 0.5,
+        ISSUE_PR_HIST: 0.1,
+    }
+
     DEDUP_THRESHOLD = 0.90
     SKILL_ISSUE_THRESHOLD = 0.25
     ISSUE_ISSUE_THRESHOLD = 0.50
 
     def __init__(self, model_name: str = "all-MiniLM-L6-v2"):
+        shared = EmbeddingService(model_name=model_name)
         self.skills = NodeStore(
-            embedding_service=EmbeddingService(model_name=model_name)
+            embedding_service=EmbeddingService(
+                model_name=model_name, model=shared.model
+            )
         )
         self.issues = NodeStore(
-            embedding_service=EmbeddingService(model_name=model_name)
+            embedding_service=EmbeddingService(
+                model_name=model_name, model=shared.model
+            )
         )
-        self.prs = NodeStore(embedding_service=EmbeddingService(model_name=model_name))
+        self.prs = NodeStore(
+            embedding_service=EmbeddingService(
+                model_name=model_name, model=shared.model
+            )
+        )
         self.adj = AdjacencyTable()
 
     def add_skill(self, skill_name: str):
@@ -144,11 +166,14 @@ class SemanticGraph:
         if not self.skills.meta or not self.issues.meta:
             return
 
-        skill_texts = [m.get("_text", "") for m in self.skills.meta]
-        issue_texts = [m.get("_text", "") for m in self.issues.meta]
-
-        skill_vecs = self.skills._service.encode(skill_texts)
-        issue_vecs = self.issues._service.encode(issue_texts)
+        skill_vecs = getattr(self.skills._service, "_vectors", None)
+        issue_vecs = getattr(self.issues._service, "_vectors", None)
+        if skill_vecs is None:
+            skill_texts = [m.get("_text", "") for m in self.skills.meta]
+            skill_vecs = self.skills._service.encode(skill_texts)
+        if issue_vecs is None:
+            issue_texts = [m.get("_text", "") for m in self.issues.meta]
+            issue_vecs = self.issues._service.encode(issue_texts)
 
         sim_matrix = skill_vecs @ issue_vecs.T
 
@@ -169,8 +194,10 @@ class SemanticGraph:
         if len(self.issues.meta) < 2:
             return
 
-        issue_texts = [m.get("_text", "") for m in self.issues.meta]
-        issue_vecs = self.issues._service.encode(issue_texts)
+        issue_vecs = getattr(self.issues._service, "_vectors", None)
+        if issue_vecs is None:
+            issue_texts = [m.get("_text", "") for m in self.issues.meta]
+            issue_vecs = self.issues._service.encode(issue_texts)
         sim_matrix = issue_vecs @ issue_vecs.T
 
         n = len(self.issues.meta)

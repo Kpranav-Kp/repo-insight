@@ -301,7 +301,7 @@ export default function LandingPage() {
             className={
               isMobile
                 ? "absolute top-[15%] left-1/2 -translate-x-1/2 w-[85vw] max-w-[320px] text-center"
-                : "absolute left-8 md:left-16 top-1/2 -translate-y-1/2 max-w-[240px] text-right"
+                : "absolute left-8 md:left-16 top-1/2 -translate-y-1/2 max-w-60 text-right"
             }
           >
             <p
@@ -347,7 +347,7 @@ export default function LandingPage() {
             className={
               isMobile
                 ? "absolute bottom-[15%] left-1/2 -translate-x-1/2 w-[85vw] max-w-[320px] text-center"
-                : "absolute right-8 md:right-16 top-1/2 -translate-y-1/2 max-w-[240px] text-left"
+                : "absolute right-8 md:right-16 top-1/2 -translate-y-1/2 max-w-60 text-left"
             }
           >
             <p
@@ -431,7 +431,7 @@ export default function LandingPage() {
 
       {/* Mobile menu overlay + panel */}
       {isMobile && mobileMenuOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center">
+        <div className="fixed inset-0 z-60 flex items-center justify-center">
           <div
             className="absolute inset-0 bg-black/70 backdrop-blur-sm"
             onClick={() => setMobileMenuOpen(false)}
@@ -568,7 +568,7 @@ export default function LandingPage() {
                       transition={{ duration: 0.4, delay: idx * 0.05 }}
                     >
                       <div
-                        className="transition-transform duration-500 ease-in-out rounded-2xl border border-white/10 grid [grid-template-areas:'stack'] min-h-[280px] cursor-pointer"
+                        className="transition-transform duration-500 ease-in-out rounded-2xl border border-white/10 grid [grid-template-areas:'stack'] min-h-70 cursor-pointer"
                         style={{
                           transformStyle: "preserve-3d",
                           transform:
@@ -702,7 +702,7 @@ export default function LandingPage() {
                       transition={{ duration: 0.5, delay: idx * 0.1 }}
                     >
                       <div
-                        className="transition-transform duration-700 ease-in-out rounded-2xl border border-white/10 grid [grid-template-areas:'stack'] h-[420px]"
+                        className="transition-transform duration-700 ease-in-out rounded-2xl border border-white/10 grid [grid-template-areas:'stack'] h-105"
                         style={{
                           transformStyle: "preserve-3d",
                           transform:

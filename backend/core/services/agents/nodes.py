@@ -26,6 +26,14 @@ from .tools import fetch_code_snippet, fetch_repo_skills
 logger = logging.getLogger(__name__)
 _groq_rotator = TokenRotator(settings.GROQ_API_KEYS)
 
+FORMATTING_INSTRUCTIONS = (
+    "Format your response in clean markdown. "
+    "Use ## or ### for section headings (not bold). "
+    "Use `code` for file names or commands. "
+    "Never use emojis. "
+    "For responses longer than a few paragraphs, include a brief TL;DR at the bottom."
+)
+
 
 def get_llm():
     from langchain_groq import ChatGroq
@@ -242,7 +250,7 @@ def guidance_node(state: AgentState) -> AgentState:
         CRITICAL RULES:
         - DO NOT provide any code snippets or code syntax. Focus purely on conceptual roadmap, file structure, and goals.
         - Encourage the user to examine the files and ask where they should start or if they have questions.
-        - Format the response using clean, easy-to-read markdown.
+        - {FORMATTING_INSTRUCTIONS}
         """
         reply = llm_respond(prompt, messages)
         return {
@@ -293,6 +301,7 @@ def guidance_node(state: AgentState) -> AgentState:
         - DO NOT provide any code snippets.
         - Break down the problem further into smaller sub-problems.
         - Suggest where in the codebase they should look (directories/files) but let them figure out the logic.
+        - {FORMATTING_INSTRUCTIONS}
         """
         reply = llm_respond(prompt, messages)
         return {
@@ -359,6 +368,7 @@ def guidance_node(state: AgentState) -> AgentState:
                 Ask one very specific follow-up question that requires them to reference
                 an actual file name, function, or line of behaviour from the codebase.
                 Do NOT provide any code or hints.
+                {FORMATTING_INSTRUCTIONS}
                 """,
                 messages,
             )
@@ -383,6 +393,7 @@ def guidance_node(state: AgentState) -> AgentState:
 
         Do NOT give any code or reveal the answer.
         At the end of your response, mention that if they feel stuck and want code assistance, they can explicitly ask for it (e.g. "show me code" or "give me boilerplate").
+        {FORMATTING_INSTRUCTIONS}
         """,
         messages,
     )
@@ -451,6 +462,7 @@ def review_node(state: AgentState) -> AgentState:
            - Do NOT write actual code changes
 
         Guide them — do not write code for them.
+        {FORMATTING_INSTRUCTIONS}
         """,
         messages,
     )
@@ -537,6 +549,7 @@ def code_assist_node(state: AgentState) -> AgentState:
         # TODO: Understand what 'param' does and implement the core logic
         pass
     End with a question asking them to try filling the TODOs.
+    {FORMATTING_INSTRUCTIONS}
     """
     reply = llm_respond(prompt, messages)
     new_count = code_assist_count + 1
