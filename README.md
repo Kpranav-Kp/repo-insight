@@ -10,7 +10,7 @@ RepoInsight is an AI-powered tutor that helps developers contribute to open-sour
 
 | Python                                                                                             | Django                                                                                            | React                                                                                         | License                                                   | Build                                                                                     |
 | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| ![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat&logo=python&logoColor=white) | ![Django](https://img.shields.io/badge/Django-4.2+-092E20?style=flat&logo=django&logoColor=white) | ![React](https://img.shields.io/badge/React-19+-61DAFB?style=flat&logo=react&logoColor=white) | ![MIT](https://img.shields.io/badge/License-MIT-blue.svg) | ![Vite](https://img.shields.io/badge/Vite-5+-646CFF?style=flat&logo=vite&logoColor=white) |
+| ![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat&logo=python&logoColor=white) | ![Django](https://img.shields.io/badge/Django-6.0+-092E20?style=flat&logo=django&logoColor=white) | ![React](https://img.shields.io/badge/React-19+-61DAFB?style=flat&logo=react&logoColor=white) | ![MIT](https://img.shields.io/badge/License-MIT-blue.svg) | ![Vite](https://img.shields.io/badge/Vite-8+-646CFF?style=flat&logo=vite&logoColor=white) |
 
 ---
 
@@ -30,17 +30,21 @@ RepoInsight is an AI-powered tutor that helps developers contribute to open-sour
 
 ```mermaid
 graph TD
-    A["React Frontend<br/>(Vite + Tailwind)"] -->|"REST API<br/>(JWT auth)"| B["Django Backend"]
+    A["React Frontend<br/>(Vite + Tailwind)"] -->|"REST API<br/>(Supabase JWT)"| B["Django Backend"]
+    A ---> I[("Supabase Auth")]
+    I --> A
     B -->|"stores data"| C[("PostgreSQL")]
     B -->|"async tasks"| D[("Celery Worker")]
     D -->|"builds graph"| E[("FAISS Indexes")]
     D -->|"calls LLM"| F[("Groq API<br/>(LLaMA 3.1)")]
+    F --> J["Token Rotator<br/>(multi-key)"]
     D -->|"fetches data"| G[("GitHub API")]
     B -->|"message queue"| H[("Redis")]
     D --> H
 
     classDef frontend fill:#61DAFB,stroke:#333,color:#000,stroke-width:2px;
     classDef backend fill:#44B78B,stroke:#333,color:#fff,stroke-width:2px;
+    classDef auth fill:#3ECF8E,stroke:#333,color:#000,stroke-width:2px;
     classDef db fill:#336791,stroke:#333,color:#fff,stroke-width:2px;
     classDef worker fill:#FF6F00,stroke:#333,color:#fff,stroke-width:2px;
     classDef vector fill:#8B5CF6,stroke:#333,color:#fff,stroke-width:2px;
@@ -50,10 +54,12 @@ graph TD
 
     class A frontend;
     class B backend;
+    class I auth;
     class C db;
     class D worker;
     class E vector;
     class F llm;
+    class J llm;
     class G api;
     class H cache;
 ```
@@ -62,8 +68,8 @@ graph TD
 
 | Component           | Tech Stack                               | Description                                                                         |
 | ------------------- | ---------------------------------------- | ----------------------------------------------------------------------------------- |
-| **React Frontend**  | React 19, Vite, Tailwind CSS v4, Base UI | Modern chat interface with `react-markdown`, syntax highlighting, and theme toggle. |
-| **Django REST API** | Django, DRF, SimpleJWT                   | Authentication, repository analysis, chat sessions, and learner profiles.           |
+| **React Frontend**  | React 19, Vite 8, Tailwind CSS v4         | Modern chat interface with `react-markdown`, syntax highlighting, and theme toggle. |
+| **Django REST API** | Django, DRF, Supabase Auth               | Repository analysis, chat sessions, learner profiles, and JWT verification.          |
 | **Celery Worker**   | Celery, Redis                            | Async repository indexing and LangGraph agent processing.                           |
 | **Semantic Graph**  | FAISS, Sentence-Transformers             | Vector search for skill-based matching with novelty scoring.                        |
 | **LLM Inference**   | Groq (LLaMA 3.1)                         | Low-latency reasoning for Socratic guidance and code review.                        |
@@ -78,8 +84,9 @@ graph TD
 - **Node.js 18+** & npm
 - **PostgreSQL ≥ 13**
 - **Redis ≥ 6**
-- **Groq API Key** (for LLM inference)
+- **Groq API Key(s)** (for LLM inference — multiple keys supported with automatic rotation)
 - **GitHub Personal Access Token** (for repository fetching)
+- **Supabase Project** (URL + anon key for authentication)
 
 ### 🐍 Backend Setup
 
@@ -101,14 +108,17 @@ graph TD
 3. **Environment Configuration**
    Create a `.env` file in the `backend` directory:
 
-   ```env
-   SECRET_KEY=your-django-secret-key
-   DEBUG=True
-   DATABASE_PASSWORD=your-postgres-password
-   DATABASE_PORT=5432
-   GROQ_API_KEY=gsk_xxxxxxxxxxxx
-   GITHUB_TOKEN=ghp_xxxxxxxxxxxx
-   ```
+    ```env
+    SECRET_KEY=your-django-secret-key
+    DEBUG=True
+    DATABASE_NAME=repoinsight
+    DATABASE_PASSWORD=your-postgres-password
+    DATABASE_PORT=5432
+    GROQ_API_KEYS=gsk_xxxx1,gsk_xxxx2,gsk_xxxx3
+    GITHUB_TOKEN=ghp_xxxxxxxxxxxx
+    SUPABASE_URL=https://your-project.supabase.co
+    SUPABASE_ANON_KEY=eyJxxxxxxxxxxxx
+    ```
 
 4. **Migrations & Redis**
 
@@ -121,7 +131,7 @@ graph TD
 
    ```bash
    # Terminal 1: Celery Worker
-   celery -A repoinsight worker -l info -P threads
+    celery -A repoinsight worker -l info -P threads --concurrency=1
 
    # Terminal 2: Django Server
    python manage.py runserver
@@ -141,6 +151,7 @@ graph TD
    npm run dev
    ```
    Access at `http://localhost:5173` (API calls are proxied to backend).
+   Optionally set `VITE_API_BASE_URL` to point the frontend at a specific API URL instead of using the Vite proxy.
 
 ---
 
@@ -178,14 +189,17 @@ Expert Dev           review          True         0          0
 
 ## 📖 Usage Flow
 
-1. **Login / Sign Up** on the landing page.
+1. **Login / Sign Up** on the landing page via Supabase auth.
 2. **Paste a GitHub Repo URL** (e.g., `https://github.com/psf/requests`).
 3. **Wait for Analysis** – Backend fetches issues/PRs and builds the semantic graph.
-4. **Skill Onboarding** – Describe your experience or use the interactive skill selector.
-5. **Receive Recommendations** – Engine suggests issues based on skills and novelty.
+4. **Skill Onboarding** – Select skills from the detected list and assign a band (heard_of / beginner / intermediate / advanced). Click Confirm on each.
+5. **Route Based on Skill Level:**
+   - **Experienced users** (any skill at intermediate+): Receive issue recommendations matched to your strongest skills.
+   - **Beginners** (all skills heard_of): Receive a hybrid response — learning roadmaps with resources for each skill, plus 1–2 beginner-friendly issues to optionally try.
+   - **No match found**: Prompted to type additional skills the engine may have missed.
 6. **Pick an Issue** – Agent enters Socratic mode to question your understanding.
-7. **Get Guided** – If stuck, receive boilerplate code with TODOs (max 3 assists).
-8. **Review & PR Outline** – After demonstrating understanding, get a PR readiness review and template.
+7. **Get Guided** – If stuck, request code assistance for boilerplate with TODOs (max 3 assists per session).
+8. **Review & PR Outline** – After demonstrating understanding, get a PR readiness review and structured template.
 
 ---
 
@@ -201,22 +215,37 @@ repoinsight/
 │   │   ├── tasks.py          # Celery async tasks
 │   │   ├── management/       # Custom commands (evaluate)
 │   │   └── services/         # Core logic
-│   │       ├── agents/       # LangGraph nodes & graph definition
+│   │       ├── agents/       # LangGraph graph, nodes, state, tools
+│   │       │   ├── graph.py
+│   │       │   ├── nodes.py
+│   │       │   ├── state.py
+│   │       │   └── tools.py
 │   │       ├── embeddings.py # FAISS & Sentence-Transformers
 │   │       ├── github.py     # GitHub API client
+│   │       ├── graph_loader.py# Load/save FAISS indexes
+│   │       ├── issue_brief.py# Issue summarization
+│   │       ├── learning_path.py# Beginner roadmap generation
 │   │       ├── recommender.py# Matching engine
-│   │       └── semantic_graph.py # Graph construction & scoring
+│   │       ├── semantic_graph.py # Graph construction & scoring
+│   │       ├── skills.py     # Batch skill extraction
+│   │       └── token_rotator.py# Multi-key Groq rotation
 │   └── manage.py
 ├── frontend/
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── chat/         # ChatPage, CurrentSession, ChatSidebar, SettingsModal
-│   │   │   ├── ui/           # Button, Card, Dialog, Input, Badge (Base UI primitives)
+│   │   │   ├── chat/         # CurrentSession, ChatSidebar, IssueRecommendations, SettingsModal
+│   │   │   ├── ui/           # Button, Card, Dialog, Input, Badge
 │   │   │   ├── LandingPage.jsx
 │   │   │   ├── Login.jsx
 │   │   │   ├── Signup.jsx
 │   │   │   └── ThemeToggle.jsx
-│   │   ├── lib/              # API client, session store, utility functions
+│   │   ├── lib/              # API client, auth, session store, utility functions
+│   │   │   ├── api.js
+│   │   │   ├── auth.js
+│   │   │   ├── sessionStore.js
+│   │   │   ├── supabase.js
+│   │   │   ├── utils.js
+│   │   │   └── variants.js
 │   │   ├── App.jsx
 │   │   └── main.jsx
 │   ├── index.html
@@ -257,4 +286,3 @@ This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) f
 - [Groq](https://groq.com/) – Fast LLM inference.
 - [FAISS](https://github.com/facebookresearch/faiss) – Vector similarity search.
 - [Sentence-Transformers](https://www.sbert.net/) – Embedding models.
-- [Shadcn UI](https://ui.shadcn.com/) – Component inspiration.
