@@ -13,6 +13,7 @@ from .views import (
     ReleaseIssueView,
     RepositoryAnalyzeView,
     RepositoryStatusView,
+    ResendVerificationView,
     SelectIssueView,
     StructuredSkillsView,
     SupabaseLoginView,
@@ -48,6 +49,7 @@ urlpatterns = [
         RecommendationFeedbackView.as_view(),
         name="recommendation-feedback",
     ),
+    path("auth/resend-verification/", ResendVerificationView.as_view()),
     path("auth/supabase/", SupabaseLoginView.as_view()),
     path(
         "chat/session/<int:session_id>/skills/structured/",

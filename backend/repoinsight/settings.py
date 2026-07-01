@@ -193,7 +193,7 @@ CLOUDFLARE_MODEL = os.getenv("CLOUDFLARE_MODEL", "@cf/meta/llama-3.1-8b-instruct
 GROQ_API_KEYS = [
     key.strip() for key in os.getenv("GROQ_API_KEYS", "").split(",") if key.strip()
 ]
-GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 GITHUB_ISSUE_LIMIT = int(os.getenv("GITHUB_ISSUE_LIMIT", 300))

@@ -5,16 +5,19 @@ from .nodes import (
     code_assist_node,
     guidance_node,
     issue_analysis_node,
+    learning_path_node,
     onboarding_node,
     review_node,
 )
-from .state import AgentState
+from .state import AgentState, is_beginner
 
 
 def route_after_onboarding(state: AgentState) -> str:
     phase = state.get("conversation_phase", "onboarding")
     if phase == "analysis":
         return "issue_analysis"
+    if phase == "learning":
+        return "learning_path"
     messages = state.get("messages", [])
     if messages and messages[-1].get("role") == "assistant":
         return END
@@ -53,6 +56,20 @@ def router_node(state: AgentState) -> AgentState:
     return state
 
 
+def route_after_learning(state: AgentState) -> str:
+    phase = state.get("conversation_phase", "learning")
+    if phase == "guidance":
+        return "guidance"
+    if phase == "complete":
+        return END
+    if state.get("selected_issue"):
+        return "guidance"
+    messages = state.get("messages", [])
+    if messages and messages[-1].get("role") == "assistant":
+        return END
+    return "learning_path"
+
+
 def route_entry(state: AgentState) -> str:
     phase = state.get("conversation_phase", "onboarding")
     if phase == "complete":
@@ -61,7 +78,11 @@ def route_entry(state: AgentState) -> str:
         return "review"
     if phase in ("guidance",) or state.get("selected_issue"):
         return "guidance"
+    if phase == "learning":
+        return "learning_path"
     if state.get("user_skills"):
+        if is_beginner(state["user_skills"]):
+            return "learning_path"
         return "issue_analysis"
     return "onboarding"
 
@@ -71,6 +92,7 @@ def build_graph():
 
     graph.add_node("router", router_node)
     graph.add_node("onboarding", onboarding_node)
+    graph.add_node("learning_path", learning_path_node)
     graph.add_node("issue_analysis", issue_analysis_node)
     graph.add_node("guidance", guidance_node)
     graph.add_node("code_assist", code_assist_node)
@@ -83,6 +105,7 @@ def build_graph():
         route_entry,
         {
             "onboarding": "onboarding",
+            "learning_path": "learning_path",
             "issue_analysis": "issue_analysis",
             "guidance": "guidance",
             "review": "review",
@@ -95,7 +118,18 @@ def build_graph():
         route_after_onboarding,
         {
             "onboarding": "onboarding",
+            "learning_path": "learning_path",
             "issue_analysis": "issue_analysis",
+            END: END,
+        },
+    )
+
+    graph.add_conditional_edges(
+        "learning_path",
+        route_after_learning,
+        {
+            "learning_path": "learning_path",
+            "guidance": "guidance",
             END: END,
         },
     )

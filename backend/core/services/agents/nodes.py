@@ -11,6 +11,7 @@ Review      → validates approach, checks novelty, produces PR outline
 import json
 import logging
 import re
+from typing import cast
 
 from core.models import Repository
 from core.services.skills import SkillExtractor
@@ -19,7 +20,7 @@ from django.conf import settings
 from pydantic import SecretStr
 
 from ..graph_loader import load_engine_for_repo
-from .state import AgentState
+from .state import AgentState, is_beginner
 from .tools import _get_model as _get_sentence_model
 from .tools import fetch_code_snippet, fetch_repo_skills
 
@@ -35,25 +36,68 @@ FORMATTING_INSTRUCTIONS = (
 )
 
 
-def get_llm():
-    from langchain_groq import ChatGroq
+def get_llms():
+    """Return a list of (provider_name, llm_instance) tuples in priority order."""
+    llms = []
 
-    return ChatGroq(
-        model="llama-3.1-8b-instant",
-        api_key=SecretStr(_groq_rotator.next()),
-        temperature=0.7,
-    )
+    try:
+        from langchain_groq import ChatGroq
+
+        llms.append(
+            (
+                "groq",
+                ChatGroq(
+                    model=settings.GROQ_MODEL,
+                    api_key=SecretStr(_groq_rotator.next()),
+                    temperature=0.7,
+                ),
+            )
+        )
+    except Exception as exc:
+        logger.warning("Failed to init Groq LLM: %s", exc)
+
+    try:
+        from langchain_cloudflare.chat_models import ChatCloudflareWorkersAI
+
+        if settings.CLOUDFLARE_API_TOKEN and settings.CLOUDFLARE_ACCOUNT_ID:
+            llms.append(
+                (
+                    "cloudflare",
+                    ChatCloudflareWorkersAI(
+                        model_name=settings.CLOUDFLARE_MODEL,
+                        api_token=settings.CLOUDFLARE_API_TOKEN,  # type: ignore
+                        account_id=settings.CLOUDFLARE_ACCOUNT_ID,  # type: ignore
+                        temperature=0.7,
+                    ),
+                )
+            )
+    except Exception as exc:
+        logger.warning("Failed to init Cloudflare LLM: %s", exc)
+
+    return llms
 
 
 def llm_respond(system_prompt: str, messages: list[dict]) -> str:
-    """Call the LLM and return plain text."""
-    llm = get_llm()
-    try:
-        response = llm.invoke([{"role": "system", "content": system_prompt}, *messages])
-        return str(response.content).strip()
-    except Exception as exc:
-        logger.exception("LLM call failed: %s", exc)
+    """Call the LLM with fallback across providers."""
+    llms = get_llms()
+    if not llms:
+        logger.error("No LLM providers available")
         return "I'm having trouble connecting right now. Please try again."
+
+    last_error = None
+    for name, llm in llms:
+        try:
+            response = llm.invoke(
+                [{"role": "system", "content": system_prompt}, *messages]
+            )
+            return str(response.content).strip()
+        except Exception as exc:
+            logger.warning("LLM provider '%s' failed: %s", name, exc)
+            last_error = exc
+            continue
+
+    logger.exception("All LLM providers failed: %s", last_error)
+    return "I'm having trouble connecting right now. Please try again."
 
 
 def _last_user_message(messages: list[dict]) -> str:
@@ -141,11 +185,15 @@ def onboarding_node(state: AgentState) -> AgentState:
         if valid_skill_names:
             skills = [{"skill": s, "band": "intermediate"} for s in valid_skill_names]
             reply = "Great! Let me find the best issues for you — one moment."
+            phase = "learning" if is_beginner(skills) else "analysis"
+            if phase == "learning":
+                reply = "Since you're new to these skills, I'll prepare a learning path along with some beginner-friendly issues to try."
             return {
                 **state,
                 "user_skills": skills,
+                "weak_skills": [s["skill"] for s in skills],
                 "messages": _assistant(messages, reply),
-                "conversation_phase": "analysis",
+                "conversation_phase": phase,
             }
         else:
             reply = llm_respond(
@@ -157,7 +205,13 @@ def onboarding_node(state: AgentState) -> AgentState:
                 "messages": _assistant(messages, reply),
                 "conversation_phase": "onboarding",
             }
-    return {**state, "conversation_phase": "analysis"}
+    # user_skills already exist (pre-populated from frontend)
+    weak = [s["skill"] for s in state["user_skills"] if s.get("band") == "heard_of"]
+    phase = "learning" if is_beginner(state["user_skills"]) else "analysis"
+    result = cast(AgentState, {**state, "conversation_phase": phase})
+    if weak:
+        result["weak_skills"] = weak
+    return result
 
 
 def issue_analysis_node(state: AgentState) -> AgentState:
@@ -194,6 +248,47 @@ def issue_analysis_node(state: AgentState) -> AgentState:
     return {**state, "conversation_phase": "analysis"}
 
 
+def learning_path_node(state: AgentState) -> AgentState:
+    """
+    Generates learning resources + beginner-friendly recommendations
+    for users whose skills are all at heard_of level.
+    """
+    messages = state.get("messages") or []
+    user_skills = state.get("user_skills") or []
+    repo_url = state.get("repo_url", "")
+    recommendations = state.get("recommendations") or []
+
+    skill_names = [s["skill"] for s in user_skills]
+
+    prompt = f"""
+    The user is new to the following skills needed for this repository: {skill_names}
+    Repository: {repo_url}
+
+    For each skill, provide:
+    1. **What it is** — a one-line plain-English explanation
+    2. **Learning resource** — a specific free resource (official docs, free tutorial, interactive course)
+    3. **Suggested mini-project** — a small real project or exercise to practice this skill
+    4. **Estimated time** — hours/days to reach basic proficiency
+
+    Format as a clear markdown list.
+
+    Then add a section titled "### Beginner-Friendly Issues"
+    explaining that issues requiring these skills are listed below
+    and that they can try one when ready.
+
+    Keep the tone encouraging and supportive.
+    """
+
+    reply = llm_respond(prompt, messages)
+
+    return {
+        **state,
+        "messages": _assistant(messages, reply),
+        "recommendations": recommendations,
+        "conversation_phase": "learning",
+    }
+
+
 def guidance_node(state: AgentState) -> AgentState:
     """
     Socratic loop — never gives code.
@@ -221,7 +316,6 @@ def guidance_node(state: AgentState) -> AgentState:
     if last == "Let's start working on this issue.":
         is_initial_guidance = True
     else:
-        # Check if there is already an assistant message that started guidance
         has_guidance = any(
             m.get("role") == "assistant"
             and (
@@ -234,7 +328,6 @@ def guidance_node(state: AgentState) -> AgentState:
             is_initial_guidance = True
 
     if is_initial_guidance:
-        # Generate initial roadmap and codebase explanation without code
         prompt = f"""
         You are an open source mentor guiding a contributor who just selected this issue.
         Issue: {json.dumps(selected_issue)}
@@ -277,7 +370,6 @@ def guidance_node(state: AgentState) -> AgentState:
             "conversation_phase": "code_assist",
         }
 
-    # 3. Classify if the user is answering our question or asking their own question/clarification
     classification = llm_respond(
         f"""
         User message: "{last}"
@@ -310,7 +402,6 @@ def guidance_node(state: AgentState) -> AgentState:
             "conversation_phase": "guidance",
         }
 
-    # 4. Process user's answer / explanation
     evaluation = llm_respond(
         f"""
         Issue context (JSON): {json.dumps(selected_issue)}
@@ -378,7 +469,6 @@ def guidance_node(state: AgentState) -> AgentState:
                 "conversation_phase": "guidance",
             }
 
-    # If answer is INSUFFICIENT, increment stuck counter
     stuck = state.get("stuck_counter", 0) + 1
 
     reply = llm_respond(

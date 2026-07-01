@@ -297,6 +297,39 @@ class LearnerProfileView(APIView):
         return Response(serializer.data)
 
 
+class ResendVerificationView(APIView):
+    permission_classes = []
+
+    def post(self, request):
+        email = request.data.get("email")
+        if not email:
+            return Response({"error": "email required"}, status=400)
+        try:
+            resp = requests.post(
+                f"{settings.SUPABASE_URL}/auth/v1/resend",
+                json={"type": "signup", "email": email},
+                headers={
+                    "apikey": settings.SUPABASE_PUBLISHABLE_KEY,
+                    "Content-Type": "application/json",
+                },
+                timeout=10,
+            )
+        except requests.RequestException as e:
+            logger.exception(f"ResendVerificationView: request failed: {e}")
+            return Response(
+                {"error": "Failed to resend verification email"}, status=502
+            )
+        if not resp.ok:
+            logger.warning(
+                f"ResendVerificationView: Supabase returned {resp.status_code}: {resp.text}"
+            )
+            return Response(
+                {"error": "Failed to resend verification email"},
+                status=resp.status_code,
+            )
+        return Response({"message": "Verification email sent"})
+
+
 class SupabaseLoginView(APIView):
     permission_classes = []
 

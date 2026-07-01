@@ -1,4 +1,5 @@
 # backend/core/services/agents/tools.py
+import os
 from collections import Counter
 
 import requests as http_requests
@@ -15,7 +16,13 @@ def _get_model():
     if _MODEL is None:
         from sentence_transformers import SentenceTransformer
 
-        _MODEL = SentenceTransformer("all-MiniLM-L6-v2")
+        local_path = os.getenv(
+            "SENTENCE_TRANSFORMERS_HOME", "C:\\HFCache\\all-MiniLM-L6-v2"
+        )
+        if os.path.isdir(local_path):
+            _MODEL = SentenceTransformer(local_path)
+        else:
+            _MODEL = SentenceTransformer("all-MiniLM-L6-v2")
     return _MODEL
 
 
