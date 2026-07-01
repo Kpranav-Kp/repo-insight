@@ -330,6 +330,62 @@ class ResendVerificationView(APIView):
         return Response({"message": "Verification email sent"})
 
 
+class SessionCheckView(APIView):
+    permission_classes = []
+    authentication_classes = []
+
+    def get(self, request):
+        access_token = request.COOKIES.get(settings.SIMPLE_JWT["AUTH_COOKIE"])
+        refresh_token = request.COOKIES.get(settings.SIMPLE_JWT["AUTH_COOKIE_REFRESH"])
+
+        if access_token:
+            from rest_framework_simplejwt.exceptions import TokenError
+            from rest_framework_simplejwt.tokens import AccessToken
+
+            try:
+                token = AccessToken(access_token)
+                user = User.objects.get(id=token.payload.get("user_id"))
+                return JsonResponse({"username": user.username, "email": user.email})
+            except (TokenError, User.DoesNotExist):
+                pass
+
+        if refresh_token:
+            try:
+                refresh = RefreshToken(refresh_token)
+                user = User.objects.get(id=refresh.payload.get("user_id"))
+                new_access = str(refresh.access_token)
+                response = JsonResponse(
+                    {"username": user.username, "email": user.email}
+                )
+                response.set_cookie(
+                    "access_token",
+                    new_access,
+                    max_age=settings.SIMPLE_JWT[
+                        "ACCESS_TOKEN_LIFETIME"
+                    ].total_seconds(),
+                    httponly=True,
+                    secure=settings.SIMPLE_JWT["AUTH_COOKIE_SECURE"],
+                    samesite=settings.SIMPLE_JWT["AUTH_COOKIE_SAMESITE"],
+                )
+                return response
+            except Exception:
+                logger.warning(
+                    "SessionCheckView: refresh token invalid, clearing session"
+                )
+
+        return Response({"error": "Not authenticated"}, status=401)
+
+
+class LogoutView(APIView):
+    permission_classes = []
+
+    def post(self, request):
+        response = JsonResponse({"message": "Logged out"})
+        response.delete_cookie("access_token", samesite="Lax")
+        response.delete_cookie("refresh_token", samesite="Lax")
+        return response
+
+
 class SupabaseLoginView(APIView):
     permission_classes = []
 
@@ -442,6 +498,7 @@ class SupabaseLoginView(APIView):
         response.set_cookie(
             "access_token",
             access,
+            max_age=settings.SIMPLE_JWT["ACCESS_TOKEN_LIFETIME"].total_seconds(),
             httponly=True,
             secure=settings.SIMPLE_JWT["AUTH_COOKIE_SECURE"],
             samesite=settings.SIMPLE_JWT["AUTH_COOKIE_SAMESITE"],
@@ -449,6 +506,7 @@ class SupabaseLoginView(APIView):
         response.set_cookie(
             "refresh_token",
             refresh_token,
+            max_age=settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"].total_seconds(),
             httponly=True,
             secure=settings.SIMPLE_JWT["AUTH_COOKIE_SECURE"],
             samesite=settings.SIMPLE_JWT["AUTH_COOKIE_SAMESITE"],

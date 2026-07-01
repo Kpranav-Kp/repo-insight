@@ -65,3 +65,24 @@ export async function signOut() {
   const { error } = await supabase.auth.signOut();
   if (error) throw error;
 }
+
+export async function checkSession() {
+  try {
+    const res = await fetch("/api/auth/session/", { credentials: "include" });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function backendLogout() {
+  try {
+    await fetch("/api/auth/logout/", {
+      method: "POST",
+      credentials: "include",
+    });
+  } catch {
+    // ignore
+  }
+}

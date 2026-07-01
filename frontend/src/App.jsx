@@ -8,6 +8,7 @@ import {
 } from "react-router-dom";
 
 import { ThemeProvider } from "@/components/ThemeToggle";
+import { backendLogout, checkSession } from "@/lib/auth";
 
 import AuthCallback from "./components/AuthCallback";
 import ChatPage from "./components/ChatPage";
@@ -16,7 +17,7 @@ import Login from "./components/Login";
 import Signup from "./components/Signup";
 import VerifyEmail from "./components/VerifyEmail";
 
-function ProtectedRoute({ children }) {
+function ProtectedRoute({ children, sessionChecked }) {
   const [isAuthenticated, setIsAuthenticated] = useState(
     !!localStorage.getItem("username"),
   );
@@ -29,6 +30,7 @@ function ProtectedRoute({ children }) {
     return () => window.removeEventListener("storage", checkAuth);
   }, []);
 
+  if (!sessionChecked) return null;
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
@@ -37,24 +39,59 @@ function ProtectedRoute({ children }) {
 
 function AppRoutes() {
   const navigate = useNavigate();
+  const [sessionChecked, setSessionChecked] = useState(false);
 
-  const handleLogout = () => {
+  useEffect(() => {
+    checkSession().then((data) => {
+      if (data && data.username) {
+        localStorage.setItem("username", data.username);
+        if (data.email) localStorage.setItem("email", data.email);
+      } else {
+        localStorage.removeItem("username");
+        localStorage.removeItem("email");
+      }
+      setSessionChecked(true);
+    });
+  }, []);
+
+  const handleLogout = async () => {
+    await backendLogout();
     localStorage.removeItem("username");
     localStorage.removeItem("email");
     navigate("/");
   };
 
+  if (!sessionChecked) return null;
+
   return (
     <Routes>
-      <Route path="/" element={<LandingPage />} />
-      <Route path="/login" element={<Login />} />
+      <Route
+        path="/"
+        element={
+          localStorage.getItem("username") ? (
+            <Navigate to="/chat" replace />
+          ) : (
+            <LandingPage />
+          )
+        }
+      />
+      <Route
+        path="/login"
+        element={
+          localStorage.getItem("username") ? (
+            <Navigate to="/chat" replace />
+          ) : (
+            <Login />
+          )
+        }
+      />
       <Route path="/signup" element={<Signup />} />
       <Route path="/auth/callback" element={<AuthCallback />} />
       <Route path="/verify-email" element={<VerifyEmail />} />
       <Route
         path="/chat"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute sessionChecked={sessionChecked}>
             <ChatPage onLogout={handleLogout} />
           </ProtectedRoute>
         }

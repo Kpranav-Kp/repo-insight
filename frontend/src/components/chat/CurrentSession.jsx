@@ -917,6 +917,15 @@ function MessageBubble({
                     const dateStr = issue.created_at
                       ? formatDate(issue.created_at)
                       : "";
+                    let btnClass =
+                      "w-full py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer";
+                    if (!selectedIssueId) {
+                      btnClass += " bg-[#2541B2] text-white hover:bg-[#1098F7]";
+                    } else {
+                      btnClass += isDark
+                        ? " bg-white/5 text-white/20 cursor-not-allowed"
+                        : " bg-black/5 text-black/20 cursor-not-allowed";
+                    }
                     return (
                       <div key={issue.id} className="w-full">
                         <button
@@ -1047,15 +1056,7 @@ function MessageBubble({
                                 onSelectIssue(issue);
                               }}
                               disabled={!!selectedIssueId}
-                              className={`w-full py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
-                                !selectedIssueId
-                                  ? isDark
-                                    ? "bg-[#2541B2] text-white hover:bg-[#1098F7]"
-                                    : "bg-[#2541B2] text-white hover:bg-[#1098F7]"
-                                  : isDark
-                                    ? "bg-white/5 text-white/20 cursor-not-allowed"
-                                    : "bg-black/5 text-black/20 cursor-not-allowed"
-                              }`}
+                              className={btnClass}
                             >
                               {isSelected ? "Selected" : "Select This Issue"}
                             </button>
