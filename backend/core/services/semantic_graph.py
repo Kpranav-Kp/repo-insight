@@ -1,7 +1,8 @@
 import logging
 import math
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import datetime
+from itertools import combinations
 
 from .embeddings import EmbeddingService, SearchResult
 
@@ -90,11 +91,13 @@ class SemanticGraph:
     SKILL_ISSUE_SIM = "SKILL_ISSUE_SIM"
     ISSUE_ISSUE_SIM = "ISSUE_ISSUE_SIM"
     ISSUE_PR_HIST = "ISSUE_PR_HIST"
+    SKILL_PREREQ = "SKILL_PREREQ"
 
     EDGE_TYPE_WEIGHTS = {
         SKILL_ISSUE_SIM: 1.0,
         ISSUE_ISSUE_SIM: 0.5,
         ISSUE_PR_HIST: 0.1,
+        SKILL_PREREQ: 0.8,
     }
 
     DEDUP_THRESHOLD = 0.90
@@ -151,15 +154,18 @@ class SemanticGraph:
         self._build_skill_issue_edges()
         self._build_issue_issue_edges()
         self._build_issue_pr_edges()
+        self.build_prerequisite_dag()
 
         si = len(self.adj.get_edges(self.SKILL_ISSUE_SIM))
         ii = len(self.adj.get_edges(self.ISSUE_ISSUE_SIM))
         ip = len(self.adj.get_edges(self.ISSUE_PR_HIST))
+        pr = len(self.adj.get_edges(self.SKILL_PREREQ))
         logger.info(
-            "Graph edges built — SKILL->ISSUE: %d | ISSUE->ISSUE: %d | ISSUE->PR: %d",
+            "Graph edges built — SKILL->ISSUE: %d | ISSUE->ISSUE: %d | ISSUE->PR: %d | PREREQ: %d",
             si,
             ii,
             ip,
+            pr,
         )
 
     def _build_skill_issue_edges(self):
@@ -226,6 +232,70 @@ class SemanticGraph:
                     relation=self.ISSUE_PR_HIST,
                     weight=1.0,
                 )
+
+    def get_skill_degree(self, skill_name: str) -> int:
+        count = 0
+        for e in self.adj.get_edges(self.SKILL_ISSUE_SIM):
+            if e["source_id"].lower() == skill_name.lower():
+                count += 1
+        return count
+
+    def build_prerequisite_dag(self, asymmetry_threshold: float = 0.15):
+        skill_counts: Counter[str] = Counter()
+        cooccurrence: dict[tuple[str, str], int] = defaultdict(int)
+
+        for meta in self.issues.meta:
+            skills = meta.get("skills", [])
+            lower_skills = [s.lower() for s in skills]
+            for s in lower_skills:
+                skill_counts[s] += 1
+            for a, b in combinations(sorted(set(lower_skills)), 2):
+                cooccurrence[(a, b)] += 1
+
+        if not skill_counts:
+            return
+
+        n_issues = len(self.issues.meta)
+        ppmi: dict[tuple[str, str], float] = {}
+        for (a, b), count_ab in cooccurrence.items():
+            p_ab = count_ab / n_issues
+            p_a = skill_counts[a] / n_issues
+            p_b = skill_counts[b] / n_issues
+            if p_a > 0 and p_b > 0:
+                val = math.log2(p_ab / (p_a * p_b))
+                if val > 0:
+                    ppmi[(a, b)] = val
+
+        for (a, b), val in ppmi.items():
+            count_ab = cooccurrence[(a, b)]
+            dep_a_on_b = count_ab / skill_counts[a]
+            dep_b_on_a = count_ab / skill_counts[b]
+
+            if dep_a_on_b > dep_b_on_a + asymmetry_threshold:
+                self.adj.add_edge(
+                    source_type="skill",
+                    source_id=b,
+                    target_type="skill",
+                    target_id=a,
+                    relation=self.SKILL_PREREQ,
+                    weight=round(val, 4),
+                )
+            elif dep_b_on_a > dep_a_on_b + asymmetry_threshold:
+                self.adj.add_edge(
+                    source_type="skill",
+                    source_id=a,
+                    target_type="skill",
+                    target_id=b,
+                    relation=self.SKILL_PREREQ,
+                    weight=round(val, 4),
+                )
+
+        prereq_count = len(self.adj.get_edges(self.SKILL_PREREQ))
+        logger.info(
+            "Prerequisite DAG built — %d directed edges from %d co-occurring skill pairs",
+            prereq_count,
+            len(ppmi),
+        )
 
     def skill_to_issue(
         self,
@@ -395,4 +465,5 @@ class SemanticGraph:
             "issues": len(self.issues),
             "prs": len(self.prs),
             "edges": len(self.adj.edges),
+            "prereq_edges": len(self.adj.get_edges(self.SKILL_PREREQ)),
         }

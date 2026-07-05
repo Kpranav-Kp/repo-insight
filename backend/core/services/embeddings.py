@@ -77,10 +77,10 @@ class EmbeddingService:
         ids, texts, metadatas = zip(*items, strict=False)
         if self._vectors is None:
             self._vectors = self.encode(list(texts))
-        vectors = self._vectors
+        vectors = np.array(self._vectors, dtype=np.float32)
 
         self.index = faiss.IndexFlatIP(self.dimension)
-        self.index.add(vectors)
+        self.index.add(vectors)  # type: ignore[arg-type]
 
         self.metadata = {}
         self.id_to_index = {}
@@ -96,7 +96,7 @@ class EmbeddingService:
             return []
 
         query_vec = self.encode([query])
-        scores, indices = self.index.search(query_vec, top_k)
+        scores, indices = self.index.search(query_vec, k=top_k)  # type: ignore[call-overload]
 
         results = []
         for score, idx in zip(scores[0], indices[0], strict=False):

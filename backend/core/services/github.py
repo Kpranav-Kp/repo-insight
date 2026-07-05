@@ -1,4 +1,5 @@
 # backend/core/services/github.py
+import json
 import re
 from dataclasses import dataclass, field
 
@@ -238,8 +239,6 @@ class GitHubClient:
     def _parse_dep_file(self, filename: str, content: str) -> list[str]:
         if filename == "package.json":
             try:
-                import json
-
                 data = json.loads(content)
                 raw = list(data.get("dependencies", {}).keys())
                 cleaned = set()
