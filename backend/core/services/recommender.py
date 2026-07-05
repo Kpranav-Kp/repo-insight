@@ -28,19 +28,13 @@ class RecommendationEngine:
         self.skill_extractor = SkillExtractor(model=self.graph.issues._service.model)
         self._is_built = False
         self._repo_language: str | None = None
+        self._skill_degree_threshold = getattr(settings, "SKILL_DEGREE_THRESHOLD", 3)
 
-    @staticmethod
-    def _is_skill_like(name: str) -> bool:
-        nl = name.lower()
-        if nl in SkillExtractor.SKILLS_DB:
-            return True
-        if "@" in nl:
-            return False
-        if nl.count("-") >= 2:
-            return False
-        if len(nl) < 2:
-            return False
-        return True
+    def _compute_skill_score(self, skill_name: str) -> float:
+        degree = self.graph.get_skill_degree(skill_name)
+        if degree < self._skill_degree_threshold:
+            return 0.0
+        return min(1.0, degree / 20)
 
     def build_from_repository(self, repo_url: str) -> dict:
         try:
@@ -86,8 +80,7 @@ class RecommendationEngine:
         self.skill_extractor.add_skills(sorted(repo_skills_lower))
 
         for skill_name in sorted(repo_skills_lower):
-            if self._is_skill_like(skill_name):
-                self.graph.add_skill(skill_name)
+            self.graph.add_skill(skill_name)
 
         skill_counter: Counter = Counter()
 
@@ -147,7 +140,11 @@ class RecommendationEngine:
         self._is_built = True
 
         most_common = skill_counter.most_common()
-        skills_found = [skill for skill, _ in most_common if self._is_skill_like(skill)]
+        skills_found = [
+            skill
+            for skill, _ in most_common
+            if self.graph.get_skill_degree(skill) >= self._skill_degree_threshold
+        ]
 
         return {
             "repository_url": repo_url,
@@ -352,6 +349,16 @@ class RecommendationEngine:
             if richness > max_richness:
                 max_richness = richness
 
+            # 5) Prerequisite score: how many issue skills have prerequisites the user knows
+            prereq_score = 0.0
+            for issue_skill in issue_skills:
+                for e in self.graph.adj.get_edges(self.graph.SKILL_PREREQ):
+                    if (
+                        e["target_id"] == issue_skill
+                        and e["source_id"] in user_skills_set
+                    ):
+                        prereq_score += e["weight"]
+
             skill_component = skill_overlap if issue_skills else edge_score
             coverage_component = user_coverage if issue_skills else edge_score * 0.5
 
@@ -372,6 +379,7 @@ class RecommendationEngine:
                     "skill_overlap": skill_overlap if issue_skills else edge_score,
                     "pr_penalty": 0.8 if cand.get("_has_pr_hist") else 1.0,
                     "ppr_score": cand.get("_ppr_score", 0.0),
+                    "prereq_score": prereq_score,
                 }
             )
 
@@ -395,10 +403,11 @@ class RecommendationEngine:
                 + 0.05 * d["normalized_label"]
                 + 0.10 * d["recency_score"]
                 + 0.15 * d["ppr_score"]
-                + 0.05 * d["entropy"]
+                + 0.03 * d["entropy"]
                 + 0.05 * issue_degree
-                + 0.05 * pr_density_norm
-                + 0.05 * richness_norm
+                + 0.03 * pr_density_norm
+                + 0.04 * richness_norm
+                + 0.05 * d["prereq_score"]
             ) * d["pr_penalty"]
 
             cand = d["cand"]

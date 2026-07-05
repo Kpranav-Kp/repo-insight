@@ -1,77 +1,45 @@
 from collections import defaultdict, deque
 
 
-def _build_adjacency(graph):
-    skill_to_issues: dict[str, set[str]] = defaultdict(set)
-    issue_to_skills: dict[str, set[str]] = defaultdict(set)
-    issue_to_issues: dict[str, set[str]] = defaultdict(set)
-
-    for edge in graph.adj.get_edges():
-        if edge["relation"] == graph.SKILL_ISSUE_SIM:
-            skill_id = edge["source_id"]
-            issue_id = edge["target_id"]
-            skill_to_issues[skill_id].add(issue_id)
-            issue_to_skills[issue_id].add(skill_id)
-        elif edge["relation"] == graph.ISSUE_ISSUE_SIM:
-            issue_to_issues[edge["source_id"]].add(edge["target_id"])
-            issue_to_issues[edge["target_id"]].add(edge["source_id"])
-
-    for issue_meta in graph.issues.meta:
-        issue_id = issue_meta.get("id", "")
-        for skill in issue_meta.get("skills", []):
-            skill_lower = skill.lower()
-            skill_to_issues[skill_lower].add(issue_id)
-            issue_to_skills[issue_id].add(skill_lower)
-
-    return skill_to_issues, issue_to_skills, issue_to_issues
-
-
 def generate_learning_path(graph, user_skills: list[str]) -> str:
-    skill_to_issues, issue_to_skills, issue_to_issues = _build_adjacency(graph)
-
-    all_skills_in_graph = set(skill_to_issues.keys())
+    all_skills_in_graph = {m["name"].lower() for m in graph.skills.meta}
     user_skills_lower = set(s.lower() for s in user_skills)
     unknown = all_skills_in_graph - user_skills_lower
 
     if not unknown:
         return "You already know all the skills aligned with this repository's open issues."
 
-    visited_skills = set(user_skills_lower)
-    visited_issues: set[str] = set()
-    queue: deque = deque()
-    for s in user_skills_lower:
-        if s in skill_to_issues:
-            queue.append((s, 0, "skill"))
+    prereq_edges = graph.adj.get_edges(graph.SKILL_PREREQ)
 
-    distance: dict[str, int] = {}
+    in_degree: dict[str, int] = defaultdict(int)
+    dependents: dict[str, list[str]] = defaultdict(list)
+
+    for e in prereq_edges:
+        src = e["source_id"].lower()
+        tgt = e["target_id"].lower()
+        if src in unknown and tgt in unknown:
+            dependents[src].append(tgt)
+            in_degree[tgt] += 1
+            in_degree.setdefault(src, 0)
+
+    for skill in unknown:
+        in_degree.setdefault(skill, 0)
+
+    queue: deque = deque(s for s in unknown if in_degree[s] == 0 and s in dependents)
+    ordered: list[str] = []
 
     while queue:
-        node, dist, node_type = queue.popleft()
-        if node_type == "skill":
-            for issue_id in skill_to_issues.get(node, set()):
-                if issue_id not in visited_issues:
-                    visited_issues.add(issue_id)
-                    queue.append((issue_id, dist + 1, "issue"))
-        elif node_type == "issue":
-            for skill_name in issue_to_skills.get(node, set()):
-                skill_lower = skill_name.lower()
-                if skill_lower not in visited_skills:
-                    visited_skills.add(skill_lower)
-                    if skill_lower not in distance:
-                        distance[skill_lower] = dist + 1
-                    queue.append((skill_lower, dist + 1, "skill"))
-            for rel_id in issue_to_issues.get(node, set()):
-                if rel_id not in visited_issues:
-                    visited_issues.add(rel_id)
-                    queue.append((rel_id, dist + 1, "issue"))
+        skill = queue.popleft()
+        ordered.append(skill)
+        for dep in dependents.get(skill, []):
+            in_degree[dep] -= 1
+            if in_degree[dep] == 0:
+                queue.append(dep)
 
-    reachable = [s for s in unknown if s.lower() in distance]
-    unreachable = [s for s in unknown if s.lower() not in distance]
+    in_dag = set(ordered)
+    remaining = sorted(s for s in unknown if s not in in_dag)
 
-    reachable.sort(key=lambda s: (distance[s.lower()], s.lower()))
-    unreachable.sort()
-
-    ordered = reachable + unreachable
+    ordered = ordered + remaining
 
     if not ordered:
         return (
@@ -93,8 +61,8 @@ def generate_learning_path(graph, user_skills: list[str]) -> str:
         path_text += f"\n\n... and {len(ordered) - 15} more skills."
 
     path_text += (
-        "\n\nStart with the skills closest to what you already know, "
-        "and gradually expand outward as you contribute."
+        "\n\nStart with the foundational skills first, "
+        "then move to skills that build on them."
     )
 
     return path_text
