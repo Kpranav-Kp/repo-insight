@@ -19,6 +19,23 @@ BAND_WEIGHTS = {
     "advanced": 1.0,
 }
 
+NON_ACTIONABLE_LABELS: set[str] = {
+    "duplicate",
+    "resolution: duplicate",
+    "status: duplicate",
+    "wontfix",
+    "won't fix",
+    "resolution: wontfix",
+    "invalid",
+    "resolution: invalid",
+    "question",
+    "by design",
+    "stale",
+    "do not merge",
+    "status: blocked",
+    "status: stale",
+}
+
 
 class RecommendationEngine:
     def __init__(self, github_token: str | None = None):
@@ -209,6 +226,9 @@ class RecommendationEngine:
                 continue
             if issue_id in exclude_issue_ids:
                 continue
+            cand_labels = {label.lower() for label in cand.get("labels", [])}
+            if cand_labels & NON_ACTIONABLE_LABELS:
+                continue
             cand["_has_pr_hist"] = issue_id in resolved_ids
             cand["_ppr_score"] = ppr_scores.get(issue_id, 0.0)
             filtered.append(cand)
@@ -230,12 +250,16 @@ class RecommendationEngine:
 
         for issue_id, ppr_score in ppr_issues:
             meta = self.graph.get_issue_by_id(issue_id)
-            if meta and meta.get("state") == "open":
-                meta["score"] = 0.0
-                meta["matched_skills"] = []
-                meta["_has_pr_hist"] = issue_id in resolved_ids
-                meta["_ppr_score"] = ppr_score
-                filtered.append(meta)
+            if not meta or meta.get("state") != "open":
+                continue
+            meta_labels = {label.lower() for label in meta.get("labels", [])}
+            if meta_labels & NON_ACTIONABLE_LABELS:
+                continue
+            meta["score"] = 0.0
+            meta["matched_skills"] = []
+            meta["_has_pr_hist"] = issue_id in resolved_ids
+            meta["_ppr_score"] = ppr_score
+            filtered.append(meta)
 
         if not filtered:
             return []
