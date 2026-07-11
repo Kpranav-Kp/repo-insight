@@ -106,3 +106,6 @@ class StructuredSkillsSerializer(serializers.Serializer):
         if not value.strip():
             raise serializers.ValidationError("Skill cannot be empty.")
         return value.lower().strip()
+
+class RecommendationFeedbackSerializer(serializers.Serializer):
+    feedback = serializers.BooleanField()

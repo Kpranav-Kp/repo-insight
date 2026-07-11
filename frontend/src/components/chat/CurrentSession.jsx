@@ -815,7 +815,18 @@ function MessageBubble({
   const [copied, setCopied] = useState(false);
   const [feedback, setFeedback] = useState(null);
   const [expandedIssueId, setExpandedIssueId] = useState(null);
+  const [issueFeedback, setIssueFeedback] = useState({});
 
+  const handleIssueFeedback = async (recId, feedbackValue) => {
+    if (!recId) return;
+    setIssueFeedback((prev) => ({ ...prev, [recId]: feedbackValue }));
+    try {
+      await api.sendRecommendationFeedback(recId, feedbackValue);
+    } catch (err) {
+      console.error("Failed to save feedback:", err);
+      setIssueFeedback((prev) => ({ ...prev, [recId]: null }));
+    }
+  };
   const handleCopy = () => {
     navigator.clipboard.writeText(msg.content);
     setCopied(true);
@@ -1049,7 +1060,55 @@ function MessageBubble({
                                 ))}
                               </div>
                             )}
-
+                            <div className="flex items-center gap-2">
+                              <span className={`text-xs ${isDark ? "text-white/40" : "text-black/40"}`}>
+                                Was this a good match?
+                              </span>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleIssueFeedback(issue.rec_id, true);
+                                }}
+                                className={cn(
+                                  "flex items-center gap-1 px-2 py-1 rounded-lg border text-xs transition-colors",
+                                  (() => {
+                                    const current = issueFeedback[issue.rec_id] ?? issue.feedback;
+                                    if (current === true) {
+                                      return isDark
+                                        ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                                        : "bg-emerald-50 border-emerald-200 text-emerald-600";
+                                    }
+                                    return isDark
+                                      ? "border-white/8 hover:bg-white/5 hover:text-white/60"
+                                      : "border-black/8 hover:bg-black/5 hover:text-black/60";
+                                  })(),
+                                )}
+                              >
+                                <ThumbsUp className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleIssueFeedback(issue.rec_id, false);
+                                }}
+                                className={cn(
+                                  "flex items-center gap-1 px-2 py-1 rounded-lg border text-xs transition-colors",
+                                  (() => {
+                                    const current = issueFeedback[issue.rec_id] ?? issue.feedback;
+                                    if (current === false) {
+                                      return isDark
+                                        ? "bg-red-500/10 border-red-500/20 text-red-400"
+                                        : "bg-red-50 border-red-200 text-red-600";
+                                    }
+                                    return isDark
+                                      ? "border-white/8 hover:bg-white/5 hover:text-white/60"
+                                      : "border-black/8 hover:bg-black/5 hover:text-black/60";
+                                  })(),
+                                )}
+                              >
+                                <ThumbsDown className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();

@@ -176,6 +176,7 @@ class RecommendationEngine:
         user_skills: list[str] | list[dict],
         top_k: int = 5,
         exclude_issue_ids: set[str] | None = None,
+        user=None,
     ) -> list[dict]:
         if not self._is_built:
             raise RuntimeError("Graph not built. Call build_from_repository() first.")
@@ -213,7 +214,7 @@ class RecommendationEngine:
             return []
 
         user_skills_set = set(s.lower() for s in user_skill_names)
-
+        feedback_scores = self._feedback_scores(user, user_skills_set) if user else {}
         # Personalized PageRank: multi-hop relevance from user skills
         ppr_scores = self._personalized_pagerank(user_skills_set)
 
@@ -278,7 +279,10 @@ class RecommendationEngine:
             edge_score = float(cand.get("score", 0))
 
             overlap_skills = user_skills_set & issue_skills
-
+            if overlap_skills:
+                fb_score = sum(feedback_scores.get(s, 0.5) for s in overlap_skills) / len(overlap_skills)
+            else:
+                fb_score = 0.5  # neutral if no skill overlap
             total_weight = 0.0
             matched_weight = 0.0
             for us in user_skills_set:
@@ -404,6 +408,7 @@ class RecommendationEngine:
                     "pr_penalty": 0.8 if cand.get("_has_pr_hist") else 1.0,
                     "ppr_score": cand.get("_ppr_score", 0.0),
                     "prereq_score": prereq_score,
+                     "feedback_score": fb_score,
                 }
             )
 
@@ -420,18 +425,19 @@ class RecommendationEngine:
             richness_norm = d["richness"] / max_richness
 
             final_score = (
-                0.20 * d["skill_component"]
+                0.18 * d["skill_component"]
                 + 0.10 * d["edge_score"]
                 + 0.10 * d["coverage_component"]
                 + 0.10 * d["difficulty_score"]
                 + 0.05 * d["normalized_label"]
                 + 0.10 * d["recency_score"]
-                + 0.15 * d["ppr_score"]
+                + 0.13 * d["ppr_score"]
                 + 0.03 * d["entropy"]
                 + 0.05 * issue_degree
                 + 0.03 * pr_density_norm
                 + 0.04 * richness_norm
                 + 0.05 * d["prereq_score"]
+                + 0.04 * d["feedback_score"]
             ) * d["pr_penalty"]
 
             cand = d["cand"]
@@ -545,6 +551,39 @@ class RecommendationEngine:
 
         scored.sort(key=lambda x: x["score"], reverse=True)
         return scored[:top_k]
+    def _feedback_scores(self, user, user_skills_set: set[str]) -> dict[str, float]:
+        """
+        Returns a per-skill score in [0, 1] based on this user's past feedback.
+        1.0 = strongly liked issues with this skill before
+        0.0 = strongly disliked issues with this skill before
+        0.5 = no feedback history for this skill (neutral, doesn't help or hurt)
+        """
+        from ..models import Recommendation
+
+        if not user_skills_set:
+            return {}
+
+        past = Recommendation.objects.filter(
+            user=user, feedback__isnull=False
+        ).values("skills_matched", "feedback")
+
+        skill_stats: dict[str, list[int]] = {}  # skill -> [thumbs_up_count, total_count]
+        for rec in past:
+            matched = [s.lower() for s in (rec["skills_matched"] or [])]
+            overlap = user_skills_set & set(matched)
+            if not overlap:
+                continue
+            for skill in overlap:
+                if skill not in skill_stats:
+                    skill_stats[skill] = [0, 0]
+                skill_stats[skill][1] += 1
+                if rec["feedback"]:
+                    skill_stats[skill][0] += 1
+
+        return {
+            skill: (up / total if total else 0.5)
+            for skill, (up, total) in skill_stats.items()
+        }
 
     def _resolved_issue_ids(self) -> set[str]:
         resolved = set()
@@ -584,6 +623,8 @@ class RecommendationEngine:
                 selected.append(remaining.pop(0))
 
         return selected
+    
+
 
     def save_index(self, directory: str):
         if not self._is_built:

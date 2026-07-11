@@ -57,10 +57,15 @@ export const api = {
       body: JSON.stringify({ skills }),
     }),
 
-  // ✅ Added missing endpoint
   getRecommendations: (sessionId) =>
     request(`/chat/session/${sessionId}/recommendations/`, {
       method: "GET",
+    }),
+
+  sendRecommendationFeedback: (recId, feedback) =>
+    request(`/recommendations/${recId}/feedback/`, {
+      method: "PATCH",
+      body: JSON.stringify({ feedback }),
     }),
 
   selectIssue: (sessionId, issue) =>

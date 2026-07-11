@@ -33,7 +33,12 @@ from .serializers import (
 )
 from .tasks import analyze_repository_task, run_chat_task
 
-
+def _safe_float(value, default=0.0):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+    
 def _delay(task: Any, *args: Any, **kwargs: Any) -> AsyncResult:
     return task.delay(*args, **kwargs)
 
@@ -224,8 +229,8 @@ class ChatSessionView(APIView):
 class RecommendationFeedbackView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def patch(self, request, rec_id):
-        rec = get_object_or_404(Recommendation, id=rec_id, user=request.user)
+    def patch(self, request, recommendation_id):
+        rec = get_object_or_404(Recommendation, id=recommendation_id, user=request.user)
         feedback = request.data.get("feedback")
         if feedback is None:
             return Response(
@@ -591,7 +596,7 @@ class RecommendationView(APIView):
                 user_skills = user_skill_names
 
             recommendations = (
-                engine.recommend(user_skills, top_k=5, exclude_issue_ids=exclude_ids)
+                engine.recommend(user_skills, top_k=5, exclude_issue_ids=exclude_ids, user=request.user)
                 if user_skill_names
                 else []
             )
@@ -614,9 +619,28 @@ class RecommendationView(APIView):
 
             formatted_recs = []
             for rec in recommendations:
+                saved, _ = Recommendation.objects.update_or_create(
+                    repository=repo,
+                    user=request.user,
+                    issue_id=str(rec.get("id")),
+                    defaults={
+                        "title": rec.get("title", ""),
+                        "summary": rec.get("summary", ""),
+                        "labels": rec.get("labels", []),
+                        "skills": rec.get("skills", []),
+                        "skills_matched": rec.get(
+                            "matched_skills", rec.get("skill_overlap", [])
+                        ),
+                        "match_score": _safe_float(rec.get("match_score")),
+                        "novelty_score": rec.get("novelty_score", 1.0),
+                        "combined_score": rec.get("combined_score", 0),
+                    },
+                )
                 formatted_recs.append(
                     {
                         "id": rec.get("id"),
+                        "rec_id": saved.id,
+                        "feedback": saved.feedback,
                         "title": rec.get("title", ""),
                         "difficulty": rec.get("difficulty", "intermediate"),
                         "skills": rec.get("skills", []),
@@ -627,7 +651,6 @@ class RecommendationView(APIView):
                         "created_at": rec.get("created_at", ""),
                     }
                 )
-
             return Response(
                 {
                     "status": "success",
