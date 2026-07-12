@@ -16,6 +16,12 @@ const WELCOME = {
     "Hey! I'm here to help you find a meaningful open source issue to work on — and guide you through it without handing you the solution.\n\nWhat's the GitHub repo URL you'd like to contribute to?",
 };
 
+function mapPhaseToResponseType(phase) {
+  if (phase === "guidance") return "guidance";
+  if (phase === "code_assist") return "code_assist";
+  return null; // onboarding, analysis, learning, review, complete — no feedback button
+}
+
 function formatDate(iso) {
   try {
     const d = new Date(iso.replace("Z", "+00:00").replace(" ", "T"));
@@ -328,7 +334,11 @@ export function CurrentSession({ activeSession, user }) {
       setMessages((m) => {
         const copy = [...m];
         if (copy[copy.length - 1]?.pending) copy.pop();
-        copy.push({ role: "ai", content: result.message });
+        copy.push({
+          role: "ai",
+          content: result.message,
+          responseType: mapPhaseToResponseType(result.phase || "guidance"),
+        });
         return copy;
       });
       setStage("ready");
@@ -366,7 +376,11 @@ export function CurrentSession({ activeSession, user }) {
       setMessages((m) => {
         const copy = [...m];
         if (copy[copy.length - 1]?.pending) copy.pop();
-        copy.push({ role: "ai", content: result.message });
+        copy.push({
+          role: "ai",
+          content: result.message,
+          responseType: mapPhaseToResponseType(result.phase || phase),
+        });
         return copy;
       });
     } catch (e) {
@@ -636,6 +650,7 @@ export function CurrentSession({ activeSession, user }) {
             <MessageBubble
               key={i}
               msg={msg}
+              sessionId={sessionId}
               selectedIssueId={selectedIssueId}
               onSelectIssue={selectIssue}
               getButtonDisabledState={getButtonDisabledState}
@@ -788,6 +803,7 @@ export function CurrentSession({ activeSession, user }) {
           <MessageBubble
             key={i}
             msg={msg}
+            sessionId={sessionId}
             selectedIssueId={selectedIssueId}
             onSelectIssue={selectIssue}
             getButtonDisabledState={getButtonDisabledState}
@@ -806,6 +822,7 @@ export function CurrentSession({ activeSession, user }) {
 
 function MessageBubble({
   msg,
+  sessionId,
   selectedIssueId,
   onSelectIssue,
   getDifficultyClass,
@@ -827,14 +844,28 @@ function MessageBubble({
       setIssueFeedback((prev) => ({ ...prev, [recId]: null }));
     }
   };
+
   const handleCopy = () => {
     navigator.clipboard.writeText(msg.content);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleFeedback = (type) => {
+  const handleFeedback = async (type) => {
+    if (!msg.responseType || !sessionId) return;
+    const feedbackValue = type === "good";
     setFeedback(type);
+    try {
+      await api.sendMessageFeedback(
+        sessionId,
+        msg.responseType,
+        msg.content,
+        feedbackValue,
+      );
+    } catch (err) {
+      console.error("Failed to save message feedback:", err);
+      setFeedback(null);
+    }
   };
 
   return (
@@ -1060,8 +1091,11 @@ function MessageBubble({
                                 ))}
                               </div>
                             )}
+
                             <div className="flex items-center gap-2">
-                              <span className={`text-xs ${isDark ? "text-white/40" : "text-black/40"}`}>
+                              <span
+                                className={`text-xs ${isDark ? "text-white/40" : "text-black/40"}`}
+                              >
                                 Was this a good match?
                               </span>
                               <button
@@ -1072,7 +1106,8 @@ function MessageBubble({
                                 className={cn(
                                   "flex items-center gap-1 px-2 py-1 rounded-lg border text-xs transition-colors",
                                   (() => {
-                                    const current = issueFeedback[issue.rec_id] ?? issue.feedback;
+                                    const current =
+                                      issueFeedback[issue.rec_id] ?? issue.feedback;
                                     if (current === true) {
                                       return isDark
                                         ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
@@ -1094,7 +1129,8 @@ function MessageBubble({
                                 className={cn(
                                   "flex items-center gap-1 px-2 py-1 rounded-lg border text-xs transition-colors",
                                   (() => {
-                                    const current = issueFeedback[issue.rec_id] ?? issue.feedback;
+                                    const current =
+                                      issueFeedback[issue.rec_id] ?? issue.feedback;
                                     if (current === false) {
                                       return isDark
                                         ? "bg-red-500/10 border-red-500/20 text-red-400"
@@ -1109,6 +1145,7 @@ function MessageBubble({
                                 <ThumbsDown className="h-3.5 w-3.5" />
                               </button>
                             </div>
+
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -1148,44 +1185,48 @@ function MessageBubble({
                   )}
                   <span>{copied ? "Copied" : "Copy"}</span>
                 </button>
-                <button
-                  onClick={() => handleFeedback("good")}
-                  className={cn(
-                    "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition-colors",
-                    (() => {
-                      if (feedback === "good") {
-                        return isDark
-                          ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-                          : "bg-emerald-50 border-emerald-200 text-emerald-600";
-                      }
-                      return isDark
-                        ? "border-white/8 hover:bg-white/5 hover:text-white/60"
-                        : "border-black/8 hover:bg-black/5 hover:text-black/60";
-                    })(),
-                  )}
-                >
-                  <ThumbsUp className="h-3.5 w-3.5" />
-                  <span>Good</span>
-                </button>
-                <button
-                  onClick={() => handleFeedback("bad")}
-                  className={cn(
-                    "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition-colors",
-                    (() => {
-                      if (feedback === "bad") {
-                        return isDark
-                          ? "bg-red-500/10 border-red-500/20 text-red-400"
-                          : "bg-red-50 border-red-200 text-red-600";
-                      }
-                      return isDark
-                        ? "border-white/8 hover:bg-white/5 hover:text-white/60"
-                        : "border-black/8 hover:bg-black/5 hover:text-black/60";
-                    })(),
-                  )}
-                >
-                  <ThumbsDown className="h-3.5 w-3.5" />
-                  <span>Bad</span>
-                </button>
+                {msg.responseType && (
+                  <>
+                    <button
+                      onClick={() => handleFeedback("good")}
+                      className={cn(
+                        "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition-colors",
+                        (() => {
+                          if (feedback === "good") {
+                            return isDark
+                              ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                              : "bg-emerald-50 border-emerald-200 text-emerald-600";
+                          }
+                          return isDark
+                            ? "border-white/8 hover:bg-white/5 hover:text-white/60"
+                            : "border-black/8 hover:bg-black/5 hover:text-black/60";
+                        })(),
+                      )}
+                    >
+                      <ThumbsUp className="h-3.5 w-3.5" />
+                      <span>Good</span>
+                    </button>
+                    <button
+                      onClick={() => handleFeedback("bad")}
+                      className={cn(
+                        "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition-colors",
+                        (() => {
+                          if (feedback === "bad") {
+                            return isDark
+                              ? "bg-red-500/10 border-red-500/20 text-red-400"
+                              : "bg-red-50 border-red-200 text-red-600";
+                          }
+                          return isDark
+                            ? "border-white/8 hover:bg-white/5 hover:text-white/60"
+                            : "border-black/8 hover:bg-black/5 hover:text-black/60";
+                        })(),
+                      )}
+                    >
+                      <ThumbsDown className="h-3.5 w-3.5" />
+                      <span>Bad</span>
+                    </button>
+                  </>
+                )}
               </div>
             )}
           </div>

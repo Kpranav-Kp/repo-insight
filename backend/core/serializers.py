@@ -4,6 +4,7 @@ from rest_framework import serializers
 from .models import (
     ConversationSession,
     LearnerProfile,
+    MessageFeedback,
     Recommendation,
     Repository,
 )
@@ -108,4 +109,25 @@ class StructuredSkillsSerializer(serializers.Serializer):
         return value.lower().strip()
 
 class RecommendationFeedbackSerializer(serializers.Serializer):
+    feedback = serializers.BooleanField()
+
+class MessageFeedbackSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MessageFeedback
+        fields = [
+            "id",
+            "session",
+            "response_type",
+            "message_content",
+            "feedback",
+            "created_at",
+        ]
+        read_only_fields = ["user", "created_at"]
+
+class MessageFeedbackCreateSerializer(serializers.Serializer):
+    session_id = serializers.IntegerField()
+    response_type = serializers.ChoiceField(
+        choices=["recommendation", "guidance", "code_assist"]
+    )
+    message_content = serializers.CharField()
     feedback = serializers.BooleanField()

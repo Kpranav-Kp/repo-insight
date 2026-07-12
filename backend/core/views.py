@@ -19,6 +19,7 @@ from .models import (
     ConversationSession,
     IssueClaim,
     LearnerProfile,
+    MessageFeedback,
     Recommendation,
     Repository,
     UserProfile,
@@ -27,6 +28,7 @@ from .serializers import (
     ChatMessageSerializer,
     ConversationSessionSerializer,
     LearnerProfileSerializer,
+    MessageFeedbackCreateSerializer,
     RecommendationSerializer,
     RepositorySerializer,
     StructuredSkillsSerializer,
@@ -242,7 +244,36 @@ class RecommendationFeedbackView(APIView):
         rec.save()
         return Response(RecommendationSerializer(rec).data)
 
+class MessageFeedbackView(APIView):
+    permission_classes = [IsAuthenticated]
 
+    def post(self, request):
+        serializer = MessageFeedbackCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        session = get_object_or_404(
+            ConversationSession, id=data["session_id"], user=request.user
+        )
+
+        feedback_obj = MessageFeedback.objects.create(
+            user=request.user,
+            session=session,
+            response_type=data["response_type"],
+            message_content=data["message_content"],
+            feedback=data["feedback"],
+        )
+
+        return Response(
+            {
+                "status": "ok",
+                "id": feedback_obj.id,
+                "response_type": feedback_obj.response_type,
+                "feedback": feedback_obj.feedback,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+    
 class ChatResultView(APIView):
     def get(self, request, task_id):
         from celery.result import AsyncResult

@@ -23,6 +23,7 @@ from ..graph_loader import load_engine_for_repo
 from .state import AgentState, is_beginner
 from .tools import _get_model as _get_sentence_model
 from .tools import fetch_code_snippet, fetch_repo_skills
+from ..feedback_stats import get_adaptive_note
 
 logger = logging.getLogger(__name__)
 _groq_rotator = TokenRotator(settings.GROQ_API_KEYS)
@@ -328,6 +329,7 @@ def guidance_node(state: AgentState) -> AgentState:
             is_initial_guidance = True
 
     if is_initial_guidance:
+        adaptive_note = get_adaptive_note("guidance")
         prompt = f"""
         You are an open source mentor guiding a contributor who just selected this issue.
         Issue: {json.dumps(selected_issue)}
@@ -343,7 +345,7 @@ def guidance_node(state: AgentState) -> AgentState:
         CRITICAL RULES:
         - DO NOT provide any code snippets or code syntax. Focus purely on conceptual roadmap, file structure, and goals.
         - Encourage the user to examine the files and ask where they should start or if they have questions.
-        - {FORMATTING_INSTRUCTIONS}
+        - {FORMATTING_INSTRUCTIONS}{adaptive_note}
         """
         reply = llm_respond(prompt, messages)
         return {
@@ -383,6 +385,7 @@ def guidance_node(state: AgentState) -> AgentState:
     ).upper()
 
     if "QUESTION" in classification:
+        adaptive_note = get_adaptive_note("guidance")
         prompt = f"""
         The user has asked a question or requested guidance regarding the issue.
         Issue: {json.dumps(selected_issue)}
@@ -393,7 +396,7 @@ def guidance_node(state: AgentState) -> AgentState:
         - DO NOT provide any code snippets.
         - Break down the problem further into smaller sub-problems.
         - Suggest where in the codebase they should look (directories/files) but let them figure out the logic.
-        - {FORMATTING_INSTRUCTIONS}
+        - {FORMATTING_INSTRUCTIONS}{adaptive_note}
         """
         reply = llm_respond(prompt, messages)
         return {
@@ -619,6 +622,7 @@ def code_assist_node(state: AgentState) -> AgentState:
     except Exception as e:
         logger.warning("Could not fetch guidelines for repo %s: %s", repo_id, e)
 
+    adaptive_note = get_adaptive_note("code_assist")
     prompt = f"""
     Issue: {json.dumps(selected_issue)}
     Repository: {repo_url}
@@ -639,7 +643,7 @@ def code_assist_node(state: AgentState) -> AgentState:
         # TODO: Understand what 'param' does and implement the core logic
         pass
     End with a question asking them to try filling the TODOs.
-    {FORMATTING_INSTRUCTIONS}
+    {FORMATTING_INSTRUCTIONS}{adaptive_note}
     """
     reply = llm_respond(prompt, messages)
     new_count = code_assist_count + 1

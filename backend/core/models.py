@@ -96,3 +96,18 @@ class LearnerProfile(models.Model):
 
     def __str__(self):
         return f"{self.user.username}'s Learner Profile"
+class MessageFeedback(models.Model):
+    RESPONSE_TYPES = [
+        ("recommendation", "Recommendation"),
+        ("guidance", "Guidance"),
+        ("code_assist", "Code Assist"),
+    ]
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    session = models.ForeignKey(ConversationSession, on_delete=models.CASCADE)
+    response_type = models.CharField(max_length=20, choices=RESPONSE_TYPES)
+    message_content = models.TextField()
+    feedback = models.BooleanField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.response_type} feedback ({self.feedback}) for {self.user.username}"

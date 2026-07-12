@@ -68,6 +68,17 @@ export const api = {
       body: JSON.stringify({ feedback }),
     }),
 
+  sendMessageFeedback: (sessionId, responseType, messageContent, feedback) =>
+    request(`/chat/message-feedback/`, {
+      method: "POST",
+      body: JSON.stringify({
+        session_id: sessionId,
+        response_type: responseType,
+        message_content: messageContent,
+        feedback,
+      }),
+    }),
+
   selectIssue: (sessionId, issue) =>
     request(`/chat/session/${sessionId}/select-issue/`, {
       method: "PUT",

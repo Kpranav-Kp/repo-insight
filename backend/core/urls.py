@@ -8,6 +8,7 @@ from .views import (
     ClaimIssueView,
     LearnerProfileView,
     LogoutView,
+    MessageFeedbackView,
     NoSkillsView,
     RecommendationFeedbackView,
     RecommendationView,
@@ -84,4 +85,5 @@ urlpatterns = [
         NoSkillsView.as_view(),
         name="no-skills",
     ),
+    path("chat/message-feedback/", MessageFeedbackView.as_view(), name="message-feedback"),
 ]
