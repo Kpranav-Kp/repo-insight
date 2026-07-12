@@ -1,8 +1,9 @@
 import json
+import logging
 import math
 import os
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import cast
 
 import numpy as np
@@ -11,6 +12,8 @@ from django.conf import settings
 from .github import GitHubClient, GitHubError, RateLimitError
 from .semantic_graph import SemanticGraph
 from .skills import SkillExtractor, extract_issue_metadata_batch
+
+logger = logging.getLogger(__name__)
 
 BAND_WEIGHTS = {
     "heard_of": 0.1,
@@ -280,7 +283,9 @@ class RecommendationEngine:
 
             overlap_skills = user_skills_set & issue_skills
             if overlap_skills:
-                fb_score = sum(feedback_scores.get(s, 0.5) for s in overlap_skills) / len(overlap_skills)
+                fb_score = sum(
+                    feedback_scores.get(s, 0.5) for s in overlap_skills
+                ) / len(overlap_skills)
             else:
                 fb_score = 0.5  # neutral if no skill overlap
             total_weight = 0.0
@@ -408,7 +413,7 @@ class RecommendationEngine:
                     "pr_penalty": 0.8 if cand.get("_has_pr_hist") else 1.0,
                     "ppr_score": cand.get("_ppr_score", 0.0),
                     "prereq_score": prereq_score,
-                     "feedback_score": fb_score,
+                    "feedback_score": fb_score,
                 }
             )
 
@@ -551,39 +556,58 @@ class RecommendationEngine:
 
         scored.sort(key=lambda x: x["score"], reverse=True)
         return scored[:top_k]
-    def _feedback_scores(self, user, user_skills_set: set[str]) -> dict[str, float]:
-        """
-        Returns a per-skill score in [0, 1] based on this user's past feedback.
-        1.0 = strongly liked issues with this skill before
-        0.0 = strongly disliked issues with this skill before
-        0.5 = no feedback history for this skill (neutral, doesn't help or hurt)
-        """
-        from ..models import Recommendation
 
-        if not user_skills_set:
+    def _feedback_scores(self, user, user_skills_set: set[str]) -> dict[str, float]:
+        from ..models import SkillFeedbackSummary
+
+        if not user or not user_skills_set or not user.pk:
             return {}
 
-        past = Recommendation.objects.filter(
-            user=user, feedback__isnull=False
-        ).values("skills_matched", "feedback")
+        now = datetime.now(timezone.utc)  # noqa: UP017
 
-        skill_stats: dict[str, list[int]] = {}  # skill -> [thumbs_up_count, total_count]
-        for rec in past:
-            matched = [s.lower() for s in (rec["skills_matched"] or [])]
-            overlap = user_skills_set & set(matched)
-            if not overlap:
+        summaries = SkillFeedbackSummary.objects.filter(
+            user=user, skill__in=user_skills_set
+        )
+        db_scores = {s.skill: s for s in summaries}
+
+        redis_scores = {}
+        try:
+            from .feedback_buffer import get_pending_scores
+
+            redis_scores = get_pending_scores(user.pk, user_skills_set)
+        except Exception as e:
+            logger.warning("Redis feedback read failed: %s", e)
+
+        scores = {}
+        for skill in user_skills_set:
+            up = 0
+            total = 0
+            last_updated = None
+
+            if skill in db_scores:
+                s = db_scores[skill]
+                up += s.thumbs_up
+                total += s.total
+                last_updated = s.last_updated
+
+            if skill in redis_scores:
+                up += redis_scores[skill].get("up", 0)
+                total += redis_scores[skill].get("total", 0)
+
+            if total == 0:
+                scores[skill] = 0.5
                 continue
-            for skill in overlap:
-                if skill not in skill_stats:
-                    skill_stats[skill] = [0, 0]
-                skill_stats[skill][1] += 1
-                if rec["feedback"]:
-                    skill_stats[skill][0] += 1
 
-        return {
-            skill: (up / total if total else 0.5)
-            for skill, (up, total) in skill_stats.items()
-        }
+            bayesian = (up + 1.0) / (total + 2.0)
+
+            decay = 1.0
+            if last_updated is not None:
+                days_since = (now - last_updated).days
+                decay = max(0.5, 1.0 - days_since / 180.0)
+
+            scores[skill] = 0.5 + (bayesian - 0.5) * decay
+
+        return scores
 
     def _resolved_issue_ids(self) -> set[str]:
         resolved = set()
@@ -623,8 +647,6 @@ class RecommendationEngine:
                 selected.append(remaining.pop(0))
 
         return selected
-    
-
 
     def save_index(self, directory: str):
         if not self._is_built:

@@ -68,6 +68,11 @@ export const api = {
       body: JSON.stringify({ feedback }),
     }),
 
+  flushFeedback: () =>
+    request("/feedback/flush/", {
+      method: "POST",
+    }),
+
   selectIssue: (sessionId, issue) =>
     request(`/chat/session/${sessionId}/select-issue/`, {
       method: "PUT",

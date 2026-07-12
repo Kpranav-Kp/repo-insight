@@ -96,3 +96,18 @@ class LearnerProfile(models.Model):
 
     def __str__(self):
         return f"{self.user.username}'s Learner Profile"
+
+
+class SkillFeedbackSummary(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    skill = models.CharField(max_length=255)
+    thumbs_up = models.IntegerField(default=0)
+    total = models.IntegerField(default=0)
+    last_updated = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("user", "skill")
+        verbose_name_plural = "Skill feedback summaries"
+
+    def __str__(self):
+        return f"{self.user.username} / {self.skill}: {self.thumbs_up}/{self.total}"

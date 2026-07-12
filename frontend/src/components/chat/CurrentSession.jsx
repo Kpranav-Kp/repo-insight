@@ -55,6 +55,7 @@ export function CurrentSession({ activeSession, user }) {
     return () => {
       mountedRef.current = false;
       abortControllerRef.current?.abort();
+      api.flushFeedback().catch(() => {});
     };
   }, []);
 
@@ -1061,7 +1062,9 @@ function MessageBubble({
                               </div>
                             )}
                             <div className="flex items-center gap-2">
-                              <span className={`text-xs ${isDark ? "text-white/40" : "text-black/40"}`}>
+                              <span
+                                className={`text-xs ${isDark ? "text-white/40" : "text-black/40"}`}
+                              >
                                 Was this a good match?
                               </span>
                               <button
@@ -1072,7 +1075,9 @@ function MessageBubble({
                                 className={cn(
                                   "flex items-center gap-1 px-2 py-1 rounded-lg border text-xs transition-colors",
                                   (() => {
-                                    const current = issueFeedback[issue.rec_id] ?? issue.feedback;
+                                    const current =
+                                      issueFeedback[issue.rec_id] ??
+                                      issue.feedback;
                                     if (current === true) {
                                       return isDark
                                         ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
@@ -1094,7 +1099,9 @@ function MessageBubble({
                                 className={cn(
                                   "flex items-center gap-1 px-2 py-1 rounded-lg border text-xs transition-colors",
                                   (() => {
-                                    const current = issueFeedback[issue.rec_id] ?? issue.feedback;
+                                    const current =
+                                      issueFeedback[issue.rec_id] ??
+                                      issue.feedback;
                                     if (current === false) {
                                       return isDark
                                         ? "bg-red-500/10 border-red-500/20 text-red-400"

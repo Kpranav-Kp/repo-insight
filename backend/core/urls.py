@@ -6,6 +6,7 @@ from .views import (
     ChatResultView,
     ChatSessionView,
     ClaimIssueView,
+    FlushFeedbackView,
     LearnerProfileView,
     LogoutView,
     NoSkillsView,
@@ -83,5 +84,10 @@ urlpatterns = [
         "chat/session/<int:session_id>/no-skills/",
         NoSkillsView.as_view(),
         name="no-skills",
+    ),
+    path(
+        "feedback/flush/",
+        FlushFeedbackView.as_view(),
+        name="flush-feedback",
     ),
 ]

@@ -33,12 +33,14 @@ from .serializers import (
 )
 from .tasks import analyze_repository_task, run_chat_task
 
+
 def _safe_float(value, default=0.0):
     try:
         return float(value)
     except (TypeError, ValueError):
         return default
-    
+
+
 def _delay(task: Any, *args: Any, **kwargs: Any) -> AsyncResult:
     return task.delay(*args, **kwargs)
 
@@ -239,7 +241,24 @@ class RecommendationFeedbackView(APIView):
             )
 
         rec.feedback = feedback
-        rec.save()
+        rec.save(update_fields=["feedback"])
+
+        from .services.feedback_buffer import (
+            FLUSH_THRESHOLD,
+            flush_user_feedback,
+            get_pending_count,
+            increment_feedback,
+        )
+
+        for skill in rec.skills_matched or []:
+            increment_feedback(request.user.id, skill.lower(), feedback)
+
+        if get_pending_count(request.user.id) >= FLUSH_THRESHOLD:
+            flushed = flush_user_feedback(request.user.id)
+            logger.info(
+                "Flushed %d feedback events for user %s", flushed, request.user.id
+            )
+
         return Response(RecommendationSerializer(rec).data)
 
 
@@ -386,8 +405,8 @@ class LogoutView(APIView):
 
     def post(self, request):
         response = JsonResponse({"message": "Logged out"})
-        response.delete_cookie("access_token", samesite="Lax")
-        response.delete_cookie("refresh_token", samesite="Lax")
+        response.delete_cookie("access_token", samesite="Lax")  # type: ignore[call-arg]
+        response.delete_cookie("refresh_token", samesite="Lax")  # type: ignore[call-arg]
         return response
 
 
@@ -596,7 +615,12 @@ class RecommendationView(APIView):
                 user_skills = user_skill_names
 
             recommendations = (
-                engine.recommend(user_skills, top_k=5, exclude_issue_ids=exclude_ids, user=request.user)
+                engine.recommend(
+                    user_skills,
+                    top_k=5,
+                    exclude_issue_ids=exclude_ids,
+                    user=request.user,
+                )
                 if user_skill_names
                 else []
             )
@@ -617,29 +641,81 @@ class RecommendationView(APIView):
                     }
                 )
 
+            from django.db import transaction
+
+            issue_ids = [str(r.get("id")) for r in recommendations]
+
+            existing = {
+                r.issue_id: r
+                for r in Recommendation.objects.filter(
+                    repository=repo, user=request.user, issue_id__in=issue_ids
+                )
+            }
+
+            to_create = []
+            to_update = []
+            for rec in recommendations:
+                issue_id = str(rec.get("id"))
+                defaults = {
+                    "title": rec.get("title", ""),
+                    "summary": rec.get("summary", ""),
+                    "labels": rec.get("labels", []),
+                    "skills": rec.get("skills", []),
+                    "skills_matched": rec.get(
+                        "matched_skills", rec.get("skill_overlap", [])
+                    ),
+                    "match_score": _safe_float(rec.get("match_score")),
+                    "novelty_score": rec.get("novelty_score", 1.0),
+                    "combined_score": rec.get("combined_score", 0),
+                }
+                if issue_id in existing:
+                    obj = existing[issue_id]
+                    for field, value in defaults.items():
+                        setattr(obj, field, value)
+                    to_update.append(obj)
+                else:
+                    to_create.append(
+                        Recommendation(
+                            repository=repo,
+                            user=request.user,
+                            issue_id=issue_id,
+                            **defaults,
+                        )
+                    )
+
+            with transaction.atomic():
+                if to_create:
+                    Recommendation.objects.bulk_create(to_create)
+                if to_update:
+                    Recommendation.objects.bulk_update(
+                        to_update,
+                        fields=[
+                            "title",
+                            "summary",
+                            "labels",
+                            "skills",
+                            "skills_matched",
+                            "match_score",
+                            "novelty_score",
+                            "combined_score",
+                        ],
+                    )
+
+            all_recs: list[Recommendation] = list(
+                Recommendation.objects.filter(
+                    repository=repo, user=request.user, issue_id__in=issue_ids
+                )
+            )
+            rec_map = {r.issue_id: r for r in all_recs}
+
             formatted_recs = []
             for rec in recommendations:
-                saved, _ = Recommendation.objects.update_or_create(
-                    repository=repo,
-                    user=request.user,
-                    issue_id=str(rec.get("id")),
-                    defaults={
-                        "title": rec.get("title", ""),
-                        "summary": rec.get("summary", ""),
-                        "labels": rec.get("labels", []),
-                        "skills": rec.get("skills", []),
-                        "skills_matched": rec.get(
-                            "matched_skills", rec.get("skill_overlap", [])
-                        ),
-                        "match_score": _safe_float(rec.get("match_score")),
-                        "novelty_score": rec.get("novelty_score", 1.0),
-                        "combined_score": rec.get("combined_score", 0),
-                    },
-                )
+                issue_id = str(rec.get("id"))
+                saved = rec_map[issue_id]
                 formatted_recs.append(
                     {
                         "id": rec.get("id"),
-                        "rec_id": saved.id,
+                        "rec_id": saved.pk,
                         "feedback": saved.feedback,
                         "title": rec.get("title", ""),
                         "difficulty": rec.get("difficulty", "intermediate"),
@@ -747,6 +823,16 @@ class ReleaseIssueView(APIView):
             user=request.user,
         ).delete()
         return Response({"status": "released", "issue_number": issue_number})
+
+
+class FlushFeedbackView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from .services.feedback_buffer import flush_user_feedback
+
+        flushed = flush_user_feedback(request.user.id)
+        return Response({"flushed": flushed})
 
 
 class NoSkillsView(APIView):
