@@ -13,11 +13,15 @@ RUN pip install --upgrade pip && pip install -r requirements.txt gunicorn whiten
 
 COPY . .
 
+WORKDIR /app/backend
+
 ENV PYTHONPATH=/app/backend \
     HF_HOME=/hf_cache \
     TRANSFORMERS_CACHE=/hf_cache
 
-RUN cd backend && python manage.py collectstatic --no-input
+ARG SECRET_KEY=dummy-build-key
+ENV SECRET_KEY=$SECRET_KEY
+RUN python manage.py collectstatic --no-input
 
 EXPOSE 8000
-CMD cd backend && gunicorn repoinsight.wsgi:application
+CMD ["gunicorn", "repoinsight.wsgi:application"]
