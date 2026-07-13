@@ -12,10 +12,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     g++ \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt gunicorn.conf.py .
+COPY requirements.txt .
 RUN pip install --upgrade pip && pip install -r requirements.txt gunicorn whitenoise
 
 COPY backend/ backend/
+COPY backend/gunicorn.conf.py .
 
 ENV HF_HOME=/hf_cache \
     TRANSFORMERS_CACHE=/hf_cache
