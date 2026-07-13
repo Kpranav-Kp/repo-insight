@@ -20,6 +20,7 @@ from django.conf import settings
 from pydantic import SecretStr
 
 from ..graph_loader import load_engine_for_repo
+from ..learning_path import generate_learning_path
 from .state import AgentState, is_beginner
 from .tools import _get_model as _get_sentence_model
 from .tools import fetch_code_snippet, fetch_repo_skills
@@ -250,33 +251,102 @@ def issue_analysis_node(state: AgentState) -> AgentState:
 
 def learning_path_node(state: AgentState) -> AgentState:
     """
-    Generates learning resources + beginner-friendly recommendations
-    for users whose skills are all at heard_of level.
+    Multi-turn learning path:
+    1. Shows topological skill order + resources → asks about prep
+    2. If yes → gives structured mastery tasks → ends
     """
     messages = state.get("messages") or []
     user_skills = state.get("user_skills") or []
     repo_url = state.get("repo_url", "")
-    recommendations = state.get("recommendations") or []
-
+    repo_id = state.get("repo_id", 0)
+    phase = state.get("conversation_phase", "learning")
     skill_names = [s["skill"] for s in user_skills]
+    last_reply = messages[-1]["content"].strip().lower() if messages else ""
+
+    # ---- Stage 2: user responded about preparing to contribute ----
+    if phase == "learning_prep":
+        if "yes" in last_reply or "sure" in last_reply or "ok" in last_reply:
+            tasks_prompt = f"""
+    The user wants structured tasks to master these skills: {skill_names}
+    Repository: {repo_url}
+
+    Create a set of progressive mastery tasks that prepare them to contribute:
+
+    ### Phase 1: Foundation (Pick 2)
+    Set up their local environment, read through the repo's existing code structure.
+    Suggest 2 concrete tasks that build familiarity with the skills above.
+
+    ### Phase 2: Practice (Pick 2)
+    Suggest 2 small, realistic tasks that mirror real contribution patterns
+    (fixing a simple bug, adding a test, improving documentation, refactoring a
+    small function).
+
+    ### Phase 3: Prepare for Contribution
+    Ask them to pick one issue from the repo that aligns with their skills.
+    List 3-5 concrete steps they should follow to tackle it.
+
+    End with: **"Ready to start? Pick any Phase 1 task and let me know!"**
+    Format in clean markdown. Keep tone encouraging.
+    """
+            reply = llm_respond(tasks_prompt, messages)
+            new_phase = "complete"
+        else:
+            reply = (
+                "No problem! When you feel ready to dive in, just come back "
+                "and we can revisit these skills. Good luck on your learning journey!"
+            )
+            new_phase = "complete"
+
+        return {
+            **state,
+            "messages": _assistant(messages, reply),
+            "conversation_phase": new_phase,
+        }
+
+    # ---- Stage 1: build learning plan with topological order ----
+    topo_order = ""
+    try:
+        engine = load_engine_for_repo(repo_id)
+        graph = engine.graph
+        topo_order = generate_learning_path(graph, skill_names)
+    except Exception as exc:
+        logger.warning("Could not load graph for learning path: %s", exc)
+        topo_order = "No prerequisite data available."
 
     prompt = f"""
-    The user is new to the following skills needed for this repository: {skill_names}
+    The user is a complete beginner to the following skills needed for this repository: {skill_names}
     Repository: {repo_url}
+
+    Below is a raw prerequisite order derived from statistical co-occurrence in the repository.
+    It may not reflect true learning dependencies — use your judgment.
+
+    ### Raw Prerequisite Order (for reference only)
+    {topo_order}
+
+    Your task: reorganize these skills into a logical learning progression for a complete beginner.
+    Group them into the following buckets:
+
+    **Foundation** — Core languages, tools, and concepts. These are what the user studies first.
+    Every other skill depends on them. (e.g. programming languages, basic tools)
+
+    **Intermediate** — Specialized skills that build on the foundation. The user moves here
+    after they're comfortable with the basics.
+
+    **Advanced** — Expert-level topics that require solid understanding of intermediate skills.
 
     For each skill, provide:
     1. **What it is** — a one-line plain-English explanation
-    2. **Learning resource** — a specific free resource (official docs, free tutorial, interactive course)
-    3. **Suggested mini-project** — a small real project or exercise to practice this skill
-    4. **Estimated time** — hours/days to reach basic proficiency
+    2. **Where to learn** — a specific free resource (official docs, tutorial, interactive course)
+    3. **How to learn** — a practical approach (build a small project, do exercises, read specific docs)
 
-    Format as a clear markdown list.
+    Organize the response under the Foundation / Intermediate / Advanced headings.
+    Keep descriptions beginner-friendly.
 
-    Then add a section titled "### Beginner-Friendly Issues"
-    explaining that issues requiring these skills are listed below
-    and that they can try one when ready.
+    Then add a section:
 
-    Keep the tone encouraging and supportive.
+    ### Ready to contribute?
+    Would you like structured tasks to master these skills and prepare for contributing
+    to this repository? Reply **yes** and I'll create a personalized preparation plan.
     """
 
     reply = llm_respond(prompt, messages)
@@ -284,8 +354,8 @@ def learning_path_node(state: AgentState) -> AgentState:
     return {
         **state,
         "messages": _assistant(messages, reply),
-        "recommendations": recommendations,
-        "conversation_phase": "learning",
+        "recommendations": state.get("recommendations") or [],
+        "conversation_phase": "learning_prep",
     }
 
 

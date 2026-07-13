@@ -745,6 +745,31 @@ class RecommendationView(APIView):
             )
 
 
+def _generate_short_title(title: str, body: str) -> str:
+    """Generate a concise (<=5 word) label that resonates with the issue content."""
+    fallback = " ".join(title.split()[:5]) if title else "Selected issue"
+    if not title:
+        return fallback
+    try:
+        from .services.agents.nodes import llm_respond
+
+        system_prompt = (
+            "You summarize GitHub issues into a very short, memorable label. "
+            "Return ONLY a title of at most 5 words that captures the core of the "
+            "issue so a contributor recognizes it at a glance. "
+            "No quotes, no punctuation at the end, no prefixes."
+        )
+        snippet = body.strip()[:800]
+        user_msg = f"Issue title: {title}\n\nIssue body:\n{snippet}"
+        result = llm_respond(system_prompt, [{"role": "user", "content": user_msg}])
+        result = (result or "").strip().strip('"').strip()
+        result = " ".join(result.split()[:6])
+        return result or fallback
+    except Exception as exc:
+        logger.warning("Short title generation failed: %s", exc)
+        return fallback
+
+
 class SelectIssueView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -767,6 +792,11 @@ class SelectIssueView(APIView):
                 repository=session.repository,
                 defaults={"user": request.user},
             )
+
+        # Generate a concise, meaningful short title for chat display
+        title = issue_data.get("title", "")
+        body = issue_data.get("body", "") or ""
+        issue_data["short_title"] = _generate_short_title(title, body)
 
         current_state = session.state or {}
         current_state["selected_issue"] = issue_data
@@ -829,10 +859,17 @@ class FlushFeedbackView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        from .services.feedback_buffer import flush_user_feedback
+        try:
+            from .services.feedback_buffer import flush_user_feedback
 
-        flushed = flush_user_feedback(request.user.id)
-        return Response({"flushed": flushed})
+            flushed = flush_user_feedback(request.user.id)
+            return Response({"flushed": flushed})
+        except Exception as exc:
+            logger.warning("Feedback flush failed: %s", exc)
+            return Response(
+                {"flushed": 0, "error": str(exc)},
+                status=status.HTTP_200_OK,
+            )
 
 
 class NoSkillsView(APIView):
@@ -843,7 +880,6 @@ class NoSkillsView(APIView):
             ConversationSession, id=session_id, user=request.user
         )
         repo: Repository = session.repository
-
         skills = repo.skills_found or []
 
         if not skills:
@@ -854,27 +890,28 @@ class NoSkillsView(APIView):
                 }
             )
 
-        lines = [
-            f"To contribute to **{repo.url}**, you'll need familiarity with these skills:",
-            "",
-        ]
-        for i, skill in enumerate(skills[:8], 1):
-            lines.append(f"{i}. **{skill}**")
-        if len(skills) > 8:
-            lines.append(f"\n... and {len(skills) - 8} more.")
-        lines.extend(
-            [
-                "",
-                "Start with the skills that interest you most. "
-                "Pick one and practice with beginner-friendly issues, "
-                "then come back when you feel ready!",
-            ]
-        )
+        # Build agent state and dispatch Celery task (avoids blocking for MiniLM)
+        current_state = {
+            "repo_id": repo.pk,
+            "repo_url": repo.url,
+            "messages": [],
+            "conversation_phase": "learning",
+            "user_skills": [{"skill": s, "band": "heard_of"} for s in skills],
+            "recommendations": [],
+            "selected_issue": None,
+            "code_assist_count": 0,
+            "stuck_counter": 0,
+            "user_id": request.user.pk,
+            "session_id": session.pk,
+            "weak_skills": [],
+        }
+        session.state = current_state
+        session.save(update_fields=["state"])
 
+        task = _delay(run_chat_task, session.pk, current_state)
         return Response(
             {
-                "status": "no_skills",
-                "roadmap": "\n".join(lines),
-                "skills_found": skills[:8],
+                "status": "processing",
+                "task_id": task.id,
             }
         )

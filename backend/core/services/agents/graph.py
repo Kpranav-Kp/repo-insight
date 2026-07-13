@@ -58,15 +58,15 @@ def router_node(state: AgentState) -> AgentState:
 
 def route_after_learning(state: AgentState) -> str:
     phase = state.get("conversation_phase", "learning")
-    if phase == "guidance":
-        return "guidance"
     if phase == "complete":
         return END
-    if state.get("selected_issue"):
+    if phase == "guidance" or state.get("selected_issue"):
         return "guidance"
     messages = state.get("messages", [])
+    # If assistant just spoke (Stage 1 done or Stage 2 done), stop and wait
     if messages and messages[-1].get("role") == "assistant":
         return END
+    # Otherwise a user message is waiting — route to the node for processing
     return "learning_path"
 
 
@@ -78,7 +78,7 @@ def route_entry(state: AgentState) -> str:
         return "review"
     if phase in ("guidance",) or state.get("selected_issue"):
         return "guidance"
-    if phase == "learning":
+    if phase in ("learning", "learning_prep"):
         return "learning_path"
     if state.get("user_skills"):
         if is_beginner(state["user_skills"]):

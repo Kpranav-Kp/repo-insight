@@ -55,7 +55,6 @@ export function CurrentSession({ activeSession, user }) {
     return () => {
       mountedRef.current = false;
       abortControllerRef.current?.abort();
-      api.flushFeedback().catch(() => {});
     };
   }, []);
 
@@ -240,11 +239,28 @@ export function CurrentSession({ activeSession, user }) {
     setStage("thinking");
     setError(null);
     try {
-      const roadmap = await api.submitNoSkills(sessionId);
-      setMessages((prev) => [
-        ...prev,
-        { role: "ai", content: roadmap.roadmap },
-      ]);
+      const result = await api.submitNoSkills(sessionId);
+      if (result.status === "processing" && result.task_id) {
+        const pollResult = await poll(
+          () => api.chatResult(result.task_id),
+          (r) => r.status === "done",
+          {
+            intervalMs: 1000,
+            timeoutMs: 300000,
+            signal: abortControllerRef.current?.signal,
+          },
+        );
+        setMessages((prev) => [
+          ...prev,
+          { role: "ai", content: pollResult.message },
+        ]);
+      } else {
+        setMessages((prev) => [
+          ...prev,
+          { role: "ai", content: result.roadmap },
+        ]);
+      }
+      setIssueLabel(`How to contribute to ${repoLabel}`);
       setStage("ready");
     } catch (err) {
       console.error("Error fetching roadmap:", err);
@@ -304,7 +320,9 @@ export function CurrentSession({ activeSession, user }) {
     try {
       await api.selectIssue(sessionId, issue);
       setSelectedIssueId(issue.id);
-      setIssueLabel(`#${issue.id}: ${issue.title}`);
+      const shortTitle =
+        issue.short_title || issue.title.split(" ").slice(0, 5).join(" ");
+      setIssueLabel(`#${issue.id}: ${shortTitle}`);
       setStage("thinking");
 
       const userMessage = `I'll work on issue #${issue.id}: ${issue.title}`;

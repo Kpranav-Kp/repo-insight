@@ -8,6 +8,7 @@ import {
 } from "react-router-dom";
 
 import { ThemeProvider } from "@/components/ThemeToggle";
+import { api } from "@/lib/api";
 import { backendLogout, checkSession } from "@/lib/auth";
 
 import AuthCallback from "./components/AuthCallback";
@@ -55,6 +56,7 @@ function AppRoutes() {
   }, []);
 
   const handleLogout = async () => {
+    await api.flushFeedback().catch(() => {});
     await backendLogout();
     localStorage.removeItem("username");
     localStorage.removeItem("email");

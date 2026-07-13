@@ -272,50 +272,33 @@ class RecommendationEngine:
 
         # First pass: compute raw features, track per-candidate min/max
         scored_data = []
-        max_degree = 1
-        max_pr_density = 0.0
-        max_richness = 0.0
-
         for cand in filtered:
             issue_id = cand["id"]
             issue_skills = set(s.lower() for s in cand.get("skills", []))
-            edge_score = float(cand.get("score", 0))
-
             overlap_skills = user_skills_set & issue_skills
+
+            # Feedback: past thumbs-up/down for overlapping skills
+            fb_score = 0.5
             if overlap_skills:
                 fb_score = sum(
                     feedback_scores.get(s, 0.5) for s in overlap_skills
                 ) / len(overlap_skills)
-            else:
-                fb_score = 0.5  # neutral if no skill overlap
-            total_weight = 0.0
-            matched_weight = 0.0
-            for us in user_skills_set:
-                bw = BAND_WEIGHTS.get(skill_bands.get(us, "intermediate"), 0.3)
-                total_weight += bw
-                if us in issue_skills:
-                    matched_weight += bw
 
+            # Skill overlap fraction: how much of the issue's skills the user knows
+            skill_overlap = 0.0
             if issue_skills:
-                issue_weight = 0.0
-                for is_ in issue_skills:
-                    bw = BAND_WEIGHTS.get(skill_bands.get(is_, "intermediate"), 0.3)
-                    issue_weight += bw if is_ in overlap_skills else 0.0
-                total_issue_weight = sum(
-                    BAND_WEIGHTS.get(skill_bands.get(is_, "intermediate"), 0.3)
-                    for is_ in issue_skills
+                total_bw = sum(
+                    BAND_WEIGHTS.get(skill_bands.get(s, "intermediate"), 0.3)
+                    for s in issue_skills
                 )
-                skill_overlap = (
-                    issue_weight / total_issue_weight if total_issue_weight else 0.0
+                matched_bw = sum(
+                    BAND_WEIGHTS.get(skill_bands.get(s, "intermediate"), 0.3)
+                    for s in overlap_skills
                 )
-                user_coverage = matched_weight / total_weight if total_weight else 0.0
-            else:
-                skill_overlap = 0.0
-                user_coverage = 0.0
+                skill_overlap = matched_bw / total_bw if total_bw else 0.0
 
             difficulty_score = self.graph.get_issue_difficulty_score(issue_id)
             label_bonus = self.graph.get_issue_label_bonus(issue_id)
-            normalized_label = label_bonus / 0.3 if label_bonus else 0.0
 
             created_str = cand.get("created_at", "")
             recency_score = 1.0
@@ -327,62 +310,7 @@ class RecommendationEngine:
                 except (ValueError, TypeError):
                     pass
 
-            # ---- Engineered features ----
-
-            # 1) Issue degree: how many skills connect to this issue
-            skill_edges = [
-                e
-                for e in self.graph.adj.get_edges(self.graph.SKILL_ISSUE_SIM)
-                if e["target_id"] == issue_id
-            ]
-            degree = len(skill_edges)
-            if degree > max_degree:
-                max_degree = degree
-
-            # 2) Skill entropy: how focused vs. broad the skill match is
-            weights = [e["weight"] for e in skill_edges]
-            if weights and len(weights) > 1:
-                total_w = sum(weights)
-                probs = [w / total_w for w in weights]
-                entropy = -sum(p * math.log(p) for p in probs) / math.log(len(weights))
-            else:
-                entropy = 0.0
-
-            # 3) Time-decayed PR density: recent PR activity = healthy issue
-            pr_edges = [
-                e
-                for e in self.graph.adj.get_edges(self.graph.ISSUE_PR_HIST)
-                if e["source_id"] == issue_id
-            ]
-            pr_density = 0.0
-            for e in pr_edges:
-                pr_meta_list = [
-                    m for m in self.graph.prs.meta if m["id"] == e["target_id"]
-                ]
-                if pr_meta_list:
-                    pr_created = pr_meta_list[0].get("created_at", "")
-                    if pr_created:
-                        try:
-                            dt = datetime.fromisoformat(
-                                pr_created.replace("Z", "+00:00")
-                            )
-                            months = (now - dt).days / 30.44
-                            pr_density += math.exp(-0.1 * months)
-                        except (ValueError, TypeError):
-                            pr_density += 0.5
-            if pr_density > max_pr_density:
-                max_pr_density = pr_density
-
-            # 4) Label richness: maintainer investment signal
-            labels = cand.get("labels", [])
-            common_labels = {"bug", "enhancement", "question", "feature", "help wanted"}
-            richness = len(
-                [label for label in labels if label.lower() not in common_labels]
-            )
-            if richness > max_richness:
-                max_richness = richness
-
-            # 5) Prerequisite score: how many issue skills have prerequisites the user knows
+            # Prerequisite score: how many issue skills have prereqs the user knows
             prereq_score = 0.0
             for issue_skill in issue_skills:
                 for e in self.graph.adj.get_edges(self.graph.SKILL_PREREQ):
@@ -392,67 +320,51 @@ class RecommendationEngine:
                     ):
                         prereq_score += e["weight"]
 
-            skill_component = skill_overlap if issue_skills else edge_score
-            coverage_component = user_coverage if issue_skills else edge_score * 0.5
-
             scored_data.append(
                 {
                     "cand": cand,
-                    "skill_component": skill_component,
-                    "coverage_component": coverage_component,
-                    "edge_score": edge_score,
+                    "skill_overlap": skill_overlap,
                     "difficulty_score": difficulty_score,
-                    "normalized_label": normalized_label,
                     "recency_score": recency_score,
-                    "entropy": entropy,
-                    "degree": degree,
-                    "pr_density": pr_density,
-                    "richness": richness,
+                    "feedback_score": fb_score,
+                    "label_bonus": label_bonus,
+                    "prereq_score": prereq_score,
                     "overlap_skills": sorted(overlap_skills),
-                    "skill_overlap": skill_overlap if issue_skills else edge_score,
                     "pr_penalty": 0.8 if cand.get("_has_pr_hist") else 1.0,
                     "ppr_score": cand.get("_ppr_score", 0.0),
-                    "prereq_score": prereq_score,
-                    "feedback_score": fb_score,
                 }
             )
 
-        # Second pass: normalize and compute final score
-        max_degree = max(max_degree, 1)
-        max_pr_density = max(max_pr_density, 1.0)
-        max_richness = max(max_richness, 1)
-
+        # Second pass: PPR-primary scoring with multiplicative modifiers
         scored = []
-        for data in scored_data:
-            d = data
-            issue_degree = d["degree"] / max_degree
-            pr_density_norm = d["pr_density"] / max_pr_density
-            richness_norm = d["richness"] / max_richness
+        for d in scored_data:
+            ppr = d["ppr_score"]
 
-            final_score = (
-                0.18 * d["skill_component"]
-                + 0.10 * d["edge_score"]
-                + 0.10 * d["coverage_component"]
-                + 0.10 * d["difficulty_score"]
-                + 0.05 * d["normalized_label"]
-                + 0.10 * d["recency_score"]
-                + 0.13 * d["ppr_score"]
-                + 0.03 * d["entropy"]
-                + 0.05 * issue_degree
-                + 0.03 * pr_density_norm
-                + 0.04 * richness_norm
-                + 0.05 * d["prereq_score"]
-                + 0.04 * d["feedback_score"]
-            ) * d["pr_penalty"]
+            # Each modifier maps a signal into [0.8, 1.2] around the PPR base
+            skill_mod = 0.8 + 0.4 * d["skill_overlap"]
+            diff_mod = 0.8 + 0.4 * d["difficulty_score"]
+            fb_mod = 0.8 + 0.4 * d["feedback_score"]
+            label_mod = 1.0 + 0.3 * d["label_bonus"]  # 1.0–1.3 (bonus only)
+            prereq_mod = 1.0 + min(0.2, 0.1 * d["prereq_score"])  # 1.0–1.2
+
+            # PPR is the gate: if PPR = 0, modifiers can't save it
+            base_score = (
+                ppr
+                * skill_mod
+                * diff_mod
+                * fb_mod
+                * label_mod
+                * prereq_mod
+                * d["pr_penalty"]
+            )
+            final_score = base_score * (0.2 + 0.8 * d["recency_score"])
 
             cand = d["cand"]
             cand["skill_overlap"] = d["overlap_skills"]
             cand["match_score"] = round(d["skill_overlap"], 4)
-            cand["edge_score"] = round(d["edge_score"], 4)
             cand["difficulty_score"] = d["difficulty_score"]
-            cand["label_bonus"] = round(d["normalized_label"] * 0.3, 4)
             cand["recency_score"] = round(d["recency_score"], 4)
-            cand["ppr_score"] = round(d["ppr_score"], 4)
+            cand["ppr_score"] = round(ppr, 4)
             cand["combined_score"] = round(final_score, 4)
 
             scored.append(cand)

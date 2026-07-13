@@ -96,7 +96,7 @@ class SemanticGraph:
     EDGE_TYPE_WEIGHTS = {
         SKILL_ISSUE_SIM: 1.0,
         ISSUE_ISSUE_SIM: 0.5,
-        ISSUE_PR_HIST: 0.1,
+        ISSUE_PR_HIST: 0.4,
         SKILL_PREREQ: 0.8,
     }
 
@@ -182,6 +182,7 @@ class SemanticGraph:
             issue_vecs = self.issues._service.encode(issue_texts)
 
         sim_matrix = skill_vecs @ issue_vecs.T
+        now = datetime.now()
 
         for s_idx, skill_meta in enumerate(self.skills.meta):
             for i_idx, issue_meta in enumerate(self.issues.meta):
@@ -194,6 +195,27 @@ class SemanticGraph:
                         target_id=issue_meta["id"],
                         relation=self.SKILL_ISSUE_SIM,
                         weight=sim,
+                    )
+                    # Reverse edge with recency weight — recent issues propagate
+                    # more PPR mass back to skills, skewing future walks to recent issues
+                    created_str = issue_meta.get("created_at", "")
+                    recency = 1.0
+                    if created_str:
+                        try:
+                            dt = datetime.fromisoformat(
+                                created_str.replace("Z", "+00:00")
+                            )
+                            months = (now - dt).days / 30.44
+                            recency = max(0.3, math.exp(-0.08 * months))
+                        except (ValueError, TypeError):
+                            pass
+                    self.adj.add_edge(
+                        source_type="issue",
+                        source_id=issue_meta["id"],
+                        target_type="skill",
+                        target_id=skill_meta["name"],
+                        relation=self.SKILL_ISSUE_SIM,
+                        weight=round(0.5 * recency, 4),
                     )
 
     def _build_issue_issue_edges(self):
