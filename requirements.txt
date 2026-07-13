@@ -19,6 +19,9 @@ redis>=5.0.0
 # Validation & Serialization
 pydantic>=2.5.0
 
+# Production server
+gunicorn>=23.0.0
+
 # Utilities
 whitenoise>=6.6.0
 python-dotenv>=1.0.0

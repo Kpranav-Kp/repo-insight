@@ -49,7 +49,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: ["gunicorn", "repoinsight.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "2", "--timeout", "120"]
+    command: ["gunicorn", "repoinsight.wsgi:application"]
 
   worker:
     build:
