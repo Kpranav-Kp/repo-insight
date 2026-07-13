@@ -1,0 +1,12 @@
+venv/
+__pycache__/
+*.pyc
+.env
+.git/
+.gitignore
+README.md
+frontend/
+.ruff_cache/
+.pre-commit-config.yaml
+.DS_Store
+*.md

@@ -1,0 +1,79 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${DATABASE_NAME}
+      POSTGRES_USER: ${DATABASE_USER:-repoinsight_user}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USER:-repoinsight_user} -d ${DATABASE_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file: .env
+    environment:
+      - DATABASE_HOST=db
+      - REDIS_URL=redis://redis:6379/0
+      - HF_HOME=/hf_cache
+      - TRANSFORMERS_CACHE=/hf_cache
+      - SENTENCE_TRANSFORMER_MODEL=all-MiniLM-L6-v2
+      - AUTH_COOKIE_SECURE=False
+    ports:
+      - "8000:8000"
+    volumes:
+      - hf_cache:/hf_cache
+      - static_volume:/app/backend/staticfiles
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: ["gunicorn", "repoinsight.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "2", "--timeout", "120"]
+
+  worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file: .env
+    environment:
+      - DATABASE_HOST=db
+      - REDIS_URL=redis://redis:6379/0
+      - HF_HOME=/hf_cache
+      - TRANSFORMERS_CACHE=/hf_cache
+      - SENTENCE_TRANSFORMER_MODEL=all-MiniLM-L6-v2
+      - AUTH_COOKIE_SECURE=False
+    volumes:
+      - hf_cache:/hf_cache
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: ["celery", "-A", "repoinsight", "worker", "--loglevel=info", "--concurrency=1"]
+
+volumes:
+  postgres_data:
+  redis_data:
+  hf_cache:
+  static_volume:

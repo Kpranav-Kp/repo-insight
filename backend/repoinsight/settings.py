@@ -78,7 +78,7 @@ SIMPLE_JWT = {
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
     "AUTH_COOKIE": "access_token",
     "AUTH_COOKIE_REFRESH": "refresh_token",
-    "AUTH_COOKIE_SECURE": False,
+    "AUTH_COOKIE_SECURE": os.getenv("AUTH_COOKIE_SECURE", "False") == "True",
     "AUTH_COOKIE_HTTP_ONLY": True,
     "AUTH_COOKIE_SAMESITE": "Lax",
 }
@@ -116,9 +116,9 @@ DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
         "NAME": os.getenv("DATABASE_NAME"),
-        "USER": "repoinsight_user",
+        "USER": os.getenv("DATABASE_USER", "repoinsight_user"),
         "PASSWORD": os.getenv("DATABASE_PASSWORD"),
-        "HOST": "localhost",
+        "HOST": os.getenv("DATABASE_HOST", "localhost"),
         "PORT": os.getenv("DATABASE_PORT"),
     }
 }
@@ -159,6 +159,17 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+try:
+    import whitenoise  # noqa: F401
+
+    STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+    MIDDLEWARE.insert(
+        MIDDLEWARE.index("django.middleware.security.SecurityMiddleware") + 1,
+        "whitenoise.middleware.WhiteNoiseMiddleware",
+    )
+except ImportError:
+    pass
 
 CACHES = {
     "default": {
@@ -171,10 +182,8 @@ CELERY_BROKER_URL = os.getenv("REDIS_URL")
 CELERY_RESULT_BACKEND = os.getenv("REDIS_URL")
 
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", default="")
-os.environ["HF_HOME"] = os.getenv("HF_HOME", default="C:\\HFCache")
-os.environ["TRANSFORMERS_CACHE"] = os.getenv(
-    "TRANSFORMERS_CACHE", default="C:\\HFCache"
-)
+os.environ["HF_HOME"] = os.getenv("HF_HOME", default="/hf_cache")
+os.environ["TRANSFORMERS_CACHE"] = os.getenv("TRANSFORMERS_CACHE", default="/hf_cache")
 SENTENCE_TRANSFORMER_MODEL = os.getenv(
     "SENTENCE_TRANSFORMER_MODEL", default="all-MiniLM-L6-v2"
 )
