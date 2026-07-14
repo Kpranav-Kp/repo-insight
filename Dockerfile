@@ -27,4 +27,4 @@ RUN python manage.py collectstatic --no-input
 
 EXPOSE 8000
 
-CMD python entrypoint.py
+CMD ["gunicorn", "-c", "gunicorn.conf.py", "repoinsight.wsgi:application"]
