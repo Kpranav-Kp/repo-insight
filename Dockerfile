@@ -26,4 +26,7 @@ ENV SECRET_KEY=$SECRET_KEY
 RUN python manage.py collectstatic --no-input
 
 EXPOSE 8000
+
+RUN chmod +x /app/backend/entrypoint.sh
+ENTRYPOINT ["/app/backend/entrypoint.sh"]
 CMD ["gunicorn", "repoinsight.wsgi:application"]
