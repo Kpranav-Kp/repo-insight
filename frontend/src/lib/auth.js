@@ -1,5 +1,7 @@
 import { supabase } from "./supabase";
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api";
+
 export async function loginWithGoogle() {
   const { error } = await supabase.auth.signInWithOAuth({
     provider: "google",
@@ -39,7 +41,7 @@ export async function resetPassword(email) {
 }
 
 export async function exchangeSupabaseToken(accessToken) {
-  const res = await fetch("/api/auth/supabase/", {
+  const res = await fetch(`${API_BASE}/auth/supabase/`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -68,7 +70,9 @@ export async function signOut() {
 
 export async function checkSession() {
   try {
-    const res = await fetch("/api/auth/session/", { credentials: "include" });
+    const res = await fetch(`${API_BASE}/auth/session/`, {
+      credentials: "include",
+    });
     if (!res.ok) return null;
     return await res.json();
   } catch {
@@ -78,7 +82,7 @@ export async function checkSession() {
 
 export async function backendLogout() {
   try {
-    await fetch("/api/auth/logout/", {
+    await fetch(`${API_BASE}/auth/logout/`, {
       method: "POST",
       credentials: "include",
     });
