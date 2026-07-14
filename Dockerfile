@@ -27,19 +27,4 @@ RUN python manage.py collectstatic --no-input
 
 EXPOSE 8000
 
-CMD python -c "
-import subprocess, sys, time
-for i in range(60):
-    r = subprocess.run([sys.executable, 'manage.py', 'migrate', '--noinput'])
-    if r.returncode == 0:
-        break
-    print(f'Migration attempt {i+1} failed, retrying in 2s...')
-    time.sleep(2)
-else:
-    print('Migrations failed. Exiting.')
-    sys.exit(1)
-print('Migrations done.')
-subprocess.run([sys.executable, 'manage.py', 'collectstatic', '--noinput', '--clear'])
-print('Starting gunicorn...')
-subprocess.run(['gunicorn', '-c', 'gunicorn.conf.py', 'repoinsight.wsgi:application'])
-"
+CMD python entrypoint.py
