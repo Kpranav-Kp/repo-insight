@@ -115,11 +115,11 @@ WSGI_APPLICATION = "repoinsight.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.getenv("DATABASE_NAME"),
-        "USER": os.getenv("DATABASE_USER", "repoinsight_user"),
-        "PASSWORD": os.getenv("DATABASE_PASSWORD"),
-        "HOST": os.getenv("DATABASE_HOST", "localhost"),
-        "PORT": os.getenv("DATABASE_PORT"),
+        "NAME": os.getenv("DATABASE_NAME") or os.getenv("PGDATABASE"),
+        "USER": os.getenv("DATABASE_USER") or os.getenv("PGUSER", "repoinsight_user"),
+        "PASSWORD": os.getenv("DATABASE_PASSWORD") or os.getenv("PGPASSWORD"),
+        "HOST": os.getenv("DATABASE_HOST") or os.getenv("PGHOST", "localhost"),
+        "PORT": os.getenv("DATABASE_PORT") or os.getenv("PGPORT"),
     }
 }
 
