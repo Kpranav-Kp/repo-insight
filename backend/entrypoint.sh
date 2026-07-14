@@ -1,10 +1,17 @@
 #!/bin/sh
-set -e
 
-echo "Waiting for database..."
+echo "=== ENTRYPOINT STARTED ==="
+echo "Workdir: $(pwd)"
+python -c "import sys; print(f'Python {sys.version}')"
+echo "DB host: ${PGHOST:-not set}"
+
+echo "--- Running migrations ---"
 i=0
 while [ $i -lt 60 ]; do
-  python manage.py migrate --noinput 2>&1 && break
+  if python manage.py migrate --noinput 2>&1; then
+    echo "Migrations succeeded."
+    break
+  fi
   i=$(( i + 1 ))
   if [ $i -ge 60 ]; then
     echo "Migrations failed after $i attempts. Exiting."
@@ -14,6 +21,8 @@ while [ $i -lt 60 ]; do
   sleep 2
 done
 
-python manage.py collectstatic --noinput --clear
+echo "--- Collectstatic ---"
+python manage.py collectstatic --noinput --clear || echo "Collectstatic had warnings"
 
+echo "=== Starting gunicorn ==="
 exec "$@"
