@@ -405,8 +405,14 @@ class LogoutView(APIView):
 
     def post(self, request):
         response = JsonResponse({"message": "Logged out"})
-        response.delete_cookie("access_token", samesite="Lax")  # type: ignore[call-arg]
-        response.delete_cookie("refresh_token", samesite="Lax")  # type: ignore[call-arg]
+        response.delete_cookie(
+            "access_token",
+            samesite=settings.SIMPLE_JWT["AUTH_COOKIE_SAMESITE"],  # type: ignore[call-arg]
+        )
+        response.delete_cookie(
+            "refresh_token",
+            samesite=settings.SIMPLE_JWT["AUTH_COOKIE_SAMESITE"],  # type: ignore[call-arg]
+        )
         return response
 
 
