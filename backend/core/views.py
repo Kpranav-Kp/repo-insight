@@ -524,7 +524,14 @@ class SupabaseLoginView(APIView):
         access = str(refresh.access_token)
         refresh_token = str(refresh)
 
-        response = JsonResponse({"username": user.username, "email": user.email})
+        response = JsonResponse(
+            {
+                "username": user.username,
+                "email": user.email,
+                "access_token": access,
+                "refresh_token": refresh_token,
+            }
+        )
         response.set_cookie(
             "access_token",
             access,

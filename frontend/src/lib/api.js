@@ -1,9 +1,13 @@
 // frontend/src/lib/api.js
+import { getStoredToken } from "./auth";
+
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
 
 export async function request(path, options = {}) {
+  const token = getStoredToken();
   const headers = {
     "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...(options.headers || {}),
   };
   const res = await fetch(`${BASE_URL}${path}`, {
